@@ -68,8 +68,7 @@ func (t *Tray) build() {
 		g := &t.groups[gi]
 		g.item = systray.AddMenuItem(g.emoji+" "+g.label, "")
 		for _, m := range g.metrics {
-			it := g.item.AddSubMenuItemCheckbox(m.label+": —",
-				"Клик — показать/убрать в menu bar", cfg.IsPinned(m.id))
+			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
 			go t.watchPin(m.id, it)
 			g.rows = append(g.rows, it)
 		}
