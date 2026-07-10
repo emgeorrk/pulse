@@ -11,13 +11,22 @@ import (
 	"github.com/emgeorrk/pulse/pkg/format"
 )
 
-// metric — одна строка в дропдауне. bar == nil означает, что метрику нельзя
-// пиннить в menu bar (нет компактного представления).
+// metric — одна строка в дропдауне. bar задаёт компактное представление для
+// menu bar; при bar == nil в баре показывается значение из menu.
 type metric struct {
 	id    entity.MetricID
 	label string
 	menu  func(s entity.Snapshot, c config.Config) string
 	bar   func(s entity.Snapshot, c config.Config) string
+}
+
+// barText — компактное представление для menu bar; без явного bar
+// используется значение из menu.
+func (m metric) barText(s entity.Snapshot, c config.Config) string {
+	if m.bar != nil {
+		return m.bar(s, c)
+	}
+	return m.menu(s, c)
 }
 
 // group — группа метрик в стиле Vitals: живой агрегат в заголовке,
@@ -134,12 +143,18 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.Available, c.DecimalBytes)
 				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					return format.BytesShort(s.Mem.Available, c.DecimalBytes)
+				},
 			},
 			{
 				id:    "mem.physical",
 				label: "Physical",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.Total, c.DecimalBytes)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					return format.BytesShort(s.Mem.Total, c.DecimalBytes)
 				},
 			},
 			{
@@ -418,6 +433,12 @@ func tempGroup(sensorNames []string) group {
 					return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit) +
 						" (" + s.Temps.Hottest.Name + ")"
 				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Temps == nil || s.Temps.Hottest.Name == "" {
+						return "—°"
+					}
+					return format.TempShort(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
+				},
 			},
 		},
 	}
@@ -562,6 +583,12 @@ func netGroup(ifaces []string) group {
 					}
 					return format.Bytes(s.Net.SessionDown, c.DecimalBytes)
 				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "↓—"
+					}
+					return "↓" + format.BytesShort(s.Net.SessionDown, c.DecimalBytes)
+				},
 			},
 			{
 				id:    "net.session.up",
@@ -571,6 +598,12 @@ func netGroup(ifaces []string) group {
 						return "—"
 					}
 					return format.Bytes(s.Net.SessionUp, c.DecimalBytes)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "↑—"
+					}
+					return "↑" + format.BytesShort(s.Net.SessionUp, c.DecimalBytes)
 				},
 			},
 		},
@@ -631,6 +664,12 @@ func diskGroup() group {
 					}
 					return format.Bytes(s.Disk.Used, c.DecimalBytes)
 				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.BytesShort(s.Disk.Used, c.DecimalBytes)
+				},
 			},
 			{
 				id:    "disk.free",
@@ -641,6 +680,12 @@ func diskGroup() group {
 					}
 					return format.Bytes(s.Disk.Available, c.DecimalBytes)
 				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.BytesShort(s.Disk.Available, c.DecimalBytes)
+				},
 			},
 			{
 				id:    "disk.total",
@@ -650,6 +695,12 @@ func diskGroup() group {
 						return "—"
 					}
 					return format.Bytes(s.Disk.Total, c.DecimalBytes)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.BytesShort(s.Disk.Total, c.DecimalBytes)
 				},
 			},
 			{
@@ -693,6 +744,12 @@ func diskGroup() group {
 					}
 					return format.Bytes(s.Disk.ReadTotal, c.DecimalBytes)
 				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "R —"
+					}
+					return "R " + format.BytesShort(s.Disk.ReadTotal, c.DecimalBytes)
+				},
 			},
 			{
 				id:    "disk.write.total",
@@ -702,6 +759,12 @@ func diskGroup() group {
 						return "—"
 					}
 					return format.Bytes(s.Disk.WriteTotal, c.DecimalBytes)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "W —"
+					}
+					return "W " + format.BytesShort(s.Disk.WriteTotal, c.DecimalBytes)
 				},
 			},
 		},

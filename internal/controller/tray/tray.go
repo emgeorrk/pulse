@@ -30,7 +30,7 @@ type Tray struct {
 	hw    entity.HWInfo
 
 	groups []groupUI
-	bar    map[entity.MetricID]metric // пиннимые метрики по id
+	bar    map[entity.MetricID]metric // метрики по id для рендера в menu bar
 
 	mu   sync.Mutex
 	last entity.Snapshot
@@ -42,9 +42,7 @@ func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
 	for _, g := range buildGroups(hw, caps) {
 		t.groups = append(t.groups, groupUI{group: g})
 		for _, m := range g.metrics {
-			if m.bar != nil {
-				t.bar[m.id] = m
-			}
+			t.bar[m.id] = m
 		}
 	}
 	return t
@@ -70,14 +68,9 @@ func (t *Tray) build() {
 		g := &t.groups[gi]
 		g.item = systray.AddMenuItem(g.emoji+" "+g.label, "")
 		for _, m := range g.metrics {
-			var it *systray.MenuItem
-			if m.bar != nil {
-				it = g.item.AddSubMenuItemCheckbox(m.label+": —",
-					"Клик — показать/убрать в menu bar", cfg.IsPinned(m.id))
-				go t.watchPin(m.id, it)
-			} else {
-				it = g.item.AddSubMenuItem(m.label+": —", "")
-			}
+			it := g.item.AddSubMenuItemCheckbox(m.label+": —",
+				"Клик — показать/убрать в menu bar", cfg.IsPinned(m.id))
+			go t.watchPin(m.id, it)
 			g.rows = append(g.rows, it)
 		}
 	}
@@ -228,7 +221,7 @@ func (t *Tray) title(s entity.Snapshot, cfg config.Config) string {
 	}
 	for _, id := range cfg.Pinned {
 		if m, ok := t.bar[id]; ok {
-			parts = append(parts, m.bar(s, cfg))
+			parts = append(parts, m.barText(s, cfg))
 		}
 	}
 	if len(parts) == 0 {

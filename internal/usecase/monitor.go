@@ -145,8 +145,7 @@ func (m *Monitor) sample() entity.Snapshot {
 
 	if m.src.Temp != nil {
 		if all, err := m.src.Temp.Temps(); err == nil {
-			t := AggregateTemps(all)
-			snap.Temps = &t
+			snap.Temps = new(AggregateTemps(all))
 		}
 	}
 	if m.src.Volt != nil {
