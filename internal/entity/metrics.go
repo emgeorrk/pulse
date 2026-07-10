@@ -51,8 +51,67 @@ type HWInfo struct {
 	NumCores       int
 }
 
-// Snapshot — один кадр всех метрик, отправляемый в UI.
+// NetCounters — накопительные счётчики одного интерфейса из if_data
+// (getifaddrs). В ядре они 32-битные и переполняются по модулю 2^32.
+type NetCounters struct {
+	Name string
+	Rx   uint32
+	Tx   uint32
+}
+
+// NetIface — скорость одного интерфейса за интервал.
+type NetIface struct {
+	Name string
+	Down float64 // байт/с
+	Up   float64
+}
+
+// NetStats — сеть: суммарные скорости, накопленный за сессию трафик и
+// разбивка по интерфейсам.
+type NetStats struct {
+	Down        float64 // байт/с, сумма по интерфейсам
+	Up          float64
+	SessionDown uint64 // байты с запуска pulse (boot-тоталы ненадёжны: счётчики 32-битные)
+	SessionUp   uint64
+	Ifaces      []NetIface
+}
+
+// DiskUsage — заполненность корневого тома, в байтах.
+type DiskUsage struct {
+	Total     uint64
+	Used      uint64
+	Available uint64
+}
+
+func (d DiskUsage) UsedFraction() float64 {
+	if d.Total == 0 {
+		return 0
+	}
+	return float64(d.Used) / float64(d.Total)
+}
+
+// DiskStats — заполненность + скорости и суммарный I/O с загрузки системы.
+type DiskStats struct {
+	DiskUsage
+	ReadRate   float64 // байт/с
+	WriteRate  float64
+	ReadTotal  uint64 // с загрузки системы (64-битные счётчики IOKit)
+	WriteTotal uint64
+}
+
+// Caps — какие группы метрик реально доступны на этом железе; недоступные
+// UI не показывает (правило CLAUDE.md: скрывать, а не падать).
+type Caps struct {
+	Net       bool
+	NetIfaces []string // интерфейсы с трафиком на момент старта
+	Disk      bool
+}
+
+// Snapshot — один кадр всех метрик, отправляемый в UI. Указатели — у групп,
+// которых может не быть на данном железе или в данном кадре.
 type Snapshot struct {
-	CPU CPUStats
-	Mem MemStats
+	CPU  CPUStats
+	Mem  MemStats
+	Net  *NetStats
+	Disk *DiskStats
 }

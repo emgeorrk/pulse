@@ -37,9 +37,9 @@ type Tray struct {
 	seen bool // получен ли хоть один кадр
 }
 
-func New(store *config.Store, hw entity.HWInfo) *Tray {
+func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
 	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}}
-	for _, g := range buildGroups(hw) {
+	for _, g := range buildGroups(hw, caps) {
 		t.groups = append(t.groups, groupUI{group: g})
 		for _, m := range g.metrics {
 			if m.bar != nil {

@@ -28,9 +28,9 @@ type group struct {
 	metrics   []metric
 }
 
-// buildGroups собирает реестр групп для этого железа. Порядок групп =
-// порядок в дропдауне. Этапы 2–5 добавляют сюда сеть/диск/температуры/…
-func buildGroups(hw entity.HWInfo) []group {
+// buildGroups собирает реестр групп для этого железа: недоступные по caps
+// группы не создаются вовсе. Порядок групп = порядок в дропдауне.
+func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 	cpu := group{
 		emoji: "⚙",
 		label: "CPU",
@@ -118,5 +118,210 @@ func buildGroups(hw entity.HWInfo) []group {
 		},
 	}
 
-	return []group{cpu, mem}
+	groups := []group{cpu, mem}
+	if caps.Net {
+		groups = append(groups, netGroup(caps.NetIfaces))
+	}
+	if caps.Disk {
+		groups = append(groups, diskGroup())
+	}
+	return groups
+}
+
+func netGroup(ifaces []string) group {
+	g := group{
+		emoji: "📶",
+		label: "Network",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.Net == nil {
+				return "—"
+			}
+			return "↓" + format.SpeedShort(s.Net.Down) + " ↑" + format.SpeedShort(s.Net.Up)
+		},
+		metrics: []metric{
+			{
+				id:    "net.down",
+				label: "Download",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "—"
+					}
+					return format.Speed(s.Net.Down)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "↓—"
+					}
+					return "↓" + format.SpeedShort(s.Net.Down)
+				},
+			},
+			{
+				id:    "net.up",
+				label: "Upload",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "—"
+					}
+					return format.Speed(s.Net.Up)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "↑—"
+					}
+					return "↑" + format.SpeedShort(s.Net.Up)
+				},
+			},
+			{
+				id:    "net.session.down",
+				label: "Session down",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "—"
+					}
+					return format.Bytes(s.Net.SessionDown, c.DecimalBytes)
+				},
+			},
+			{
+				id:    "net.session.up",
+				label: "Session up",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil {
+						return "—"
+					}
+					return format.Bytes(s.Net.SessionUp, c.DecimalBytes)
+				},
+			},
+		},
+	}
+	for _, name := range ifaces {
+		name := name
+		g.metrics = append(g.metrics, metric{
+			id:    entity.MetricID("net.iface." + name),
+			label: name,
+			menu: func(s entity.Snapshot, c config.Config) string {
+				if s.Net != nil {
+					for _, i := range s.Net.Ifaces {
+						if i.Name == name {
+							return "↓" + format.SpeedShort(i.Down) + " ↑" + format.SpeedShort(i.Up)
+						}
+					}
+				}
+				return "idle"
+			},
+		})
+	}
+	return g
+}
+
+func diskGroup() group {
+	return group{
+		emoji: "💽",
+		label: "Storage",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.Disk == nil {
+				return "—"
+			}
+			return format.Percent(s.Disk.UsedFraction())
+		},
+		metrics: []metric{
+			{
+				id:    "disk.usage",
+				label: "Usage",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Percent(s.Disk.UsedFraction())
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "DSK —"
+					}
+					return "DSK " + format.Percent(s.Disk.UsedFraction())
+				},
+			},
+			{
+				id:    "disk.used",
+				label: "Used",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Bytes(s.Disk.Used, c.DecimalBytes)
+				},
+			},
+			{
+				id:    "disk.free",
+				label: "Free",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Bytes(s.Disk.Available, c.DecimalBytes)
+				},
+			},
+			{
+				id:    "disk.total",
+				label: "Total",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Bytes(s.Disk.Total, c.DecimalBytes)
+				},
+			},
+			{
+				id:    "disk.read",
+				label: "Read rate",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Speed(s.Disk.ReadRate)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "R —"
+					}
+					return "R " + format.SpeedShort(s.Disk.ReadRate)
+				},
+			},
+			{
+				id:    "disk.write",
+				label: "Write rate",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Speed(s.Disk.WriteRate)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "W —"
+					}
+					return "W " + format.SpeedShort(s.Disk.WriteRate)
+				},
+			},
+			{
+				id:    "disk.read.total",
+				label: "Read total (boot)",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Bytes(s.Disk.ReadTotal, c.DecimalBytes)
+				},
+			},
+			{
+				id:    "disk.write.total",
+				label: "Write total (boot)",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Disk == nil {
+						return "—"
+					}
+					return format.Bytes(s.Disk.WriteTotal, c.DecimalBytes)
+				},
+			},
+		},
+	}
 }

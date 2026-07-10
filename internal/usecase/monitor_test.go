@@ -48,6 +48,39 @@ func TestCPUUsageTickWraparound(t *testing.T) {
 	}
 }
 
+func TestNetRates(t *testing.T) {
+	prev := map[string]entity.NetCounters{
+		"en0":  {Name: "en0", Rx: 1000, Tx: 500},
+		"wrap": {Name: "wrap", Rx: math.MaxUint32 - 99, Tx: 0},
+	}
+	cur := []entity.NetCounters{
+		{Name: "en0", Rx: 3000, Tx: 1500},  // +2000 rx, +1000 tx за 2 c
+		{Name: "wrap", Rx: 100, Tx: 0},     // переполнение: дельта 200
+		{Name: "utun9", Rx: 999, Tx: 999},  // новый интерфейс — пропускаем до следующего тика
+	}
+
+	got := NetRates(prev, cur, 2)
+
+	if !almostEqual(got.Down, (2000+200)/2.0) {
+		t.Errorf("Down = %v, want 1100", got.Down)
+	}
+	if !almostEqual(got.Up, 500) {
+		t.Errorf("Up = %v, want 500", got.Up)
+	}
+	if len(got.Ifaces) != 2 {
+		t.Errorf("Ifaces = %v, want en0+wrap only", got.Ifaces)
+	}
+}
+
+func TestRate64(t *testing.T) {
+	if got := rate64(100, 300, 2); !almostEqual(got, 100) {
+		t.Errorf("rate64 = %v, want 100", got)
+	}
+	if got := rate64(300, 100, 2); got != 0 {
+		t.Errorf("rate64 after reset = %v, want 0", got)
+	}
+}
+
 func TestCPUUsageEmptyAndMismatched(t *testing.T) {
 	if got := CPUUsage(nil, nil); got.Total != 0 || len(got.Cores) != 0 {
 		t.Errorf("nil ticks: got %+v, want zero stats", got)

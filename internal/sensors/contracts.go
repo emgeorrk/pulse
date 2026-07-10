@@ -16,3 +16,25 @@ type CPUSource interface {
 type MemSource interface {
 	Read() (entity.MemStats, error)
 }
+
+// NetSource отдаёт накопительные счётчики трафика по интерфейсам;
+// скорости считает usecase по дельте.
+type NetSource interface {
+	Counters() ([]entity.NetCounters, error)
+}
+
+// DiskSource отдаёт заполненность корневого тома и накопительные счётчики
+// чтения/записи (IOKit, с загрузки системы).
+type DiskSource interface {
+	Usage() (entity.DiskUsage, error)
+	IOTotals() (read, write uint64, err error)
+}
+
+// Sources — собранные при старте источники; nil = недоступен на этом железе
+// (группа скрывается). CPU и Mem обязательны.
+type Sources struct {
+	CPU  CPUSource
+	Mem  MemSource
+	Net  NetSource
+	Disk DiskSource
+}

@@ -1,5 +1,5 @@
 // Package usecase содержит логику мониторинга: цикл сэмплирования сенсоров
-// и расчёт загрузки CPU по дельте тиков.
+// и расчёт метрик по дельтам накопительных счётчиков.
 package usecase
 
 import (
@@ -15,18 +15,28 @@ import (
 const historyLen = 12
 
 type Monitor struct {
-	cpu   sensors.CPUSource
-	mem   sensors.MemSource
+	src   sensors.Sources
 	store *config.Store
+
+	// состояние между тиками
+	prevTicks []entity.CoreTicks
+	prevNet   map[string]entity.NetCounters
+	sessDown  uint64
+	sessUp    uint64
+	prevRead  uint64
+	prevWrite uint64
+	haveDisk  bool
+	lastTick  time.Time
+	history   []float64
 }
 
-func NewMonitor(cpu sensors.CPUSource, mem sensors.MemSource, store *config.Store) *Monitor {
-	return &Monitor{cpu: cpu, mem: mem, store: store}
+func NewMonitor(src sensors.Sources, store *config.Store) *Monitor {
+	return &Monitor{src: src, store: store}
 }
 
 // Start запускает цикл сэмплирования в отдельной горутине (никогда не на
-// UI-потоке). Первый кадр приходит через interval — сразу с осмысленной
-// дельтой CPU. Интервал перечитывается из настроек на каждом тике, так что
+// UI-потоке). Первый кадр приходит через interval — сразу с осмысленными
+// дельтами. Интервал перечитывается из настроек на каждом тике, так что
 // смена в Settings подхватывается без рестарта. Канал закрывается при
 // отмене ctx.
 func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
@@ -34,9 +44,7 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 	go func() {
 		defer close(out)
 
-		prev, _ := m.cpu.Ticks() // точка отсчёта для первой дельты
-		history := make([]float64, 0, historyLen)
-
+		m.prime()
 		interval := m.store.Get().Interval()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -53,23 +61,7 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 				ticker.Reset(interval)
 			}
 
-			var snap entity.Snapshot
-			if cur, err := m.cpu.Ticks(); err == nil {
-				if prev != nil {
-					snap.CPU = CPUUsage(prev, cur)
-				}
-				prev = cur
-
-				if len(history) == historyLen {
-					copy(history, history[1:])
-					history = history[:historyLen-1]
-				}
-				history = append(history, snap.CPU.Total)
-				snap.CPU.History = append([]float64(nil), history...)
-			}
-			if ms, err := m.mem.Read(); err == nil {
-				snap.Mem = ms
-			}
+			snap := m.sample()
 
 			// UI не успел забрать прошлый кадр — просто роняем его.
 			select {
@@ -79,6 +71,79 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 		}
 	}()
 	return out
+}
+
+// prime снимает первые значения счётчиков — точки отсчёта для дельт.
+func (m *Monitor) prime() {
+	m.prevTicks, _ = m.src.CPU.Ticks()
+	if m.src.Net != nil {
+		if counters, err := m.src.Net.Counters(); err == nil {
+			m.prevNet = countersMap(counters)
+		}
+	}
+	if m.src.Disk != nil {
+		if r, w, err := m.src.Disk.IOTotals(); err == nil {
+			m.prevRead, m.prevWrite, m.haveDisk = r, w, true
+		}
+	}
+	m.lastTick = time.Now()
+	m.history = make([]float64, 0, historyLen)
+}
+
+// sample снимает один кадр всех доступных метрик.
+func (m *Monitor) sample() entity.Snapshot {
+	now := time.Now()
+	dwell := now.Sub(m.lastTick).Seconds()
+	m.lastTick = now
+	if dwell <= 0 {
+		dwell = 1
+	}
+
+	var snap entity.Snapshot
+
+	if cur, err := m.src.CPU.Ticks(); err == nil {
+		if m.prevTicks != nil {
+			snap.CPU = CPUUsage(m.prevTicks, cur)
+		}
+		m.prevTicks = cur
+
+		if len(m.history) == historyLen {
+			copy(m.history, m.history[1:])
+			m.history = m.history[:historyLen-1]
+		}
+		m.history = append(m.history, snap.CPU.Total)
+		snap.CPU.History = append([]float64(nil), m.history...)
+	}
+
+	if ms, err := m.src.Mem.Read(); err == nil {
+		snap.Mem = ms
+	}
+
+	if m.src.Net != nil && m.prevNet != nil {
+		if counters, err := m.src.Net.Counters(); err == nil {
+			net := NetRates(m.prevNet, counters, dwell)
+			m.prevNet = countersMap(counters)
+			m.sessDown += uint64(net.Down * dwell)
+			m.sessUp += uint64(net.Up * dwell)
+			net.SessionDown, net.SessionUp = m.sessDown, m.sessUp
+			snap.Net = &net
+		}
+	}
+
+	if m.src.Disk != nil {
+		if usage, err := m.src.Disk.Usage(); err == nil {
+			disk := entity.DiskStats{DiskUsage: usage}
+			if r, w, err := m.src.Disk.IOTotals(); err == nil && m.haveDisk {
+				disk.ReadRate = rate64(m.prevRead, r, dwell)
+				disk.WriteRate = rate64(m.prevWrite, w, dwell)
+				disk.ReadTotal, disk.WriteTotal = r, w
+				m.prevRead, m.prevWrite = r, w
+			}
+			snap.Disk = &disk
+		}
+	}
+
+	return snap
 }
 
 // CPUUsage считает загрузку по дельте накопительных тиков. Тики 32-битные и
@@ -103,4 +168,42 @@ func CPUUsage(prev, cur []entity.CoreTicks) entity.CPUStats {
 		stats.Total = float64(busyAll) / float64(totalAll)
 	}
 	return stats
+}
+
+// NetRates считает скорости по дельтам 32-битных счётчиков if_data
+// (вычитание в uint32 корректно при переполнении). Интерфейсы без прошлого
+// значения (появились между тиками) пропускаются до следующего тика.
+func NetRates(prev map[string]entity.NetCounters, cur []entity.NetCounters, dwellSec float64) entity.NetStats {
+	var stats entity.NetStats
+	for _, c := range cur {
+		p, ok := prev[c.Name]
+		if !ok {
+			continue
+		}
+		down := float64(c.Rx-p.Rx) / dwellSec
+		up := float64(c.Tx-p.Tx) / dwellSec
+		stats.Down += down
+		stats.Up += up
+		if down > 0 || up > 0 {
+			stats.Ifaces = append(stats.Ifaces, entity.NetIface{Name: c.Name, Down: down, Up: up})
+		}
+	}
+	return stats
+}
+
+func countersMap(counters []entity.NetCounters) map[string]entity.NetCounters {
+	m := make(map[string]entity.NetCounters, len(counters))
+	for _, c := range counters {
+		m[c.Name] = c
+	}
+	return m
+}
+
+// rate64 — скорость по 64-битным счётчикам; сброс счётчика (cur < prev)
+// не даёт отрицательных скоростей.
+func rate64(prev, cur uint64, dwellSec float64) float64 {
+	if cur < prev {
+		return 0
+	}
+	return float64(cur-prev) / dwellSec
 }
