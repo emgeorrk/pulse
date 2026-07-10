@@ -33,7 +33,7 @@ type group struct {
 // группы не создаются вовсе. Порядок групп = порядок в дропдауне.
 func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 	cpu := group{
-		emoji: "⚙",
+		emoji: "⚙️",
 		label: "CPU",
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			return format.Percent(s.CPU.Total)
@@ -364,7 +364,7 @@ func batteryGroup() group {
 
 func tempGroup(sensorNames []string) group {
 	g := group{
-		emoji: "🌡",
+		emoji: "🌡️",
 		label: "Temp",
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			if s.Temps == nil {

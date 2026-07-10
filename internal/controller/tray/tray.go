@@ -103,7 +103,7 @@ func (t *Tray) build() {
 }
 
 func (t *Tray) buildSettings(cfg config.Config) {
-	s := systray.AddMenuItem("🛠 Settings", "")
+	s := systray.AddMenuItem("🛠️ Settings", "")
 
 	// интервал обновления — радиогруппа
 	intervals := []int{1, 2, 3, 5}

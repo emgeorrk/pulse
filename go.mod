@@ -8,3 +8,8 @@ require (
 )
 
 require github.com/godbus/dbus/v5 v5.1.0 // indirect
+
+// Локальный форк v1.12.2 с патчем systray_darwin.m: у пунктов с подменю
+// снимается action, иначе на macOS 14+ клик по ним закрывает всё меню.
+// Патчи помечены "PATCH(pulse)".
+replace fyne.io/systray => ./third_party/systray
