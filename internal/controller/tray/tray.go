@@ -78,7 +78,10 @@ func (t *Tray) build() {
 	systray.AddSeparator()
 	sys := systray.AddMenuItem("ℹ️ System", "")
 	sys.AddSubMenuItem(t.hw.Chip, "")
-	if t.hw.Model != "" {
+	switch {
+	case t.hw.ModelName != "":
+		sys.AddSubMenuItem(prettyModel(t.hw.ModelName, t.hw.Chip), "")
+	case t.hw.Model != "":
 		sys.AddSubMenuItem("Model: "+t.hw.Model, "")
 	}
 	if t.hw.OSVersion != "" {
@@ -240,4 +243,23 @@ func setChecked(item *systray.MenuItem, on bool) {
 
 func formatSeconds(sec int) string {
 	return fmt.Sprintf("%d s", sec)
+}
+
+// prettyModel убирает из product-name скобки и дубль чипа — он уже показан
+// отдельной строкой: "MacBook Pro (16-inch, M5 Pro)" → "MacBook Pro 16-inch".
+func prettyModel(name, chip string) string {
+	base, rest, ok := strings.Cut(name, "(")
+	if !ok {
+		return name
+	}
+	parts := []string{strings.TrimSpace(base)}
+	rest = strings.TrimSuffix(strings.TrimSpace(rest), ")")
+	for _, tok := range strings.Split(rest, ",") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" || strings.Contains(chip, tok) {
+			continue
+		}
+		parts = append(parts, tok)
+	}
+	return strings.Join(parts, " ")
 }

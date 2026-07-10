@@ -46,6 +46,7 @@ func (m MemStats) UsedFraction() float64 {
 type HWInfo struct {
 	Chip           string // machdep.cpu.brand_string, например "Apple M5 Pro"
 	Model          string // hw.model, например "Mac17,8"
+	ModelName      string // product-name из IODeviceTree, например "MacBook Pro (16-inch, M5 Pro)"; пусто на Intel
 	OSVersion      string // kern.osproductversion, например "26.5.2"
 	IsAppleSilicon bool
 	NumCores       int
