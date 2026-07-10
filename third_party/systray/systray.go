@@ -246,6 +246,12 @@ func (item *MenuItem) Disable() {
 	item.update()
 }
 
+// KeepMenuOpen makes a click on the item perform its action without closing
+// the menu (macOS only; no-op elsewhere). PATCH(pulse).
+func (item *MenuItem) KeepMenuOpen() {
+	keepMenuOpen(item)
+}
+
 // Hide hides a menu item
 func (item *MenuItem) Hide() {
 	hideMenuItem(item)

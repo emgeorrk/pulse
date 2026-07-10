@@ -18,6 +18,7 @@ void setTooltip(char* tooltip);
 void setRemovalAllowed(bool allowed);
 void add_or_update_menu_item(int menuId, int parentMenuId, char* title, char* tooltip, short disabled, short checked, short isCheckable);
 void add_separator(int menuId, int parentId);
+void set_menu_item_keep_open(int menuId);
 void hide_menu_item(int menuId);
 void remove_menu_item(int menuId);
 void show_menu_item(int menuId);

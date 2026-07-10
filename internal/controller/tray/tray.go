@@ -69,6 +69,7 @@ func (t *Tray) build() {
 		g.item = systray.AddMenuItem(g.emoji+" "+g.label, "")
 		for _, m := range g.metrics {
 			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
+			it.KeepMenuOpen() // пиннинг нескольких метрик за одно открытие меню
 			go t.watchPin(m.id, it)
 			g.rows = append(g.rows, it)
 		}
@@ -107,6 +108,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 		sec := sec
 		label := formatSeconds(sec)
 		it := s.AddSubMenuItemCheckbox("Update: "+label, "", cfg.IntervalSec == sec)
+		it.KeepMenuOpen()
 		intervalItems = append(intervalItems, it)
 		go func(me *systray.MenuItem) {
 			for range me.ClickedCh {
@@ -122,17 +124,22 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	// единицы температуры — радиогруппа (актуально с этапа температур)
 	tempC := s.AddSubMenuItemCheckbox("Temperature: °C", "", cfg.TempUnit == config.Celsius)
 	tempF := s.AddSubMenuItemCheckbox("Temperature: °F", "", cfg.TempUnit == config.Fahrenheit)
+	tempC.KeepMenuOpen()
+	tempF.KeepMenuOpen()
 	go t.watchRadio(tempC, tempF, func(c *config.Config) { c.TempUnit = config.Celsius })
 	go t.watchRadio(tempF, tempC, func(c *config.Config) { c.TempUnit = config.Fahrenheit })
 
 	// единицы памяти — радиогруппа
 	binU := s.AddSubMenuItemCheckbox("Memory: GiB (binary)", "", !cfg.DecimalBytes)
 	decU := s.AddSubMenuItemCheckbox("Memory: GB (decimal)", "", cfg.DecimalBytes)
+	binU.KeepMenuOpen()
+	decU.KeepMenuOpen()
 	go t.watchRadio(binU, decU, func(c *config.Config) { c.DecimalBytes = false })
 	go t.watchRadio(decU, binU, func(c *config.Config) { c.DecimalBytes = true })
 
 	// спарклайн CPU в menu bar
 	spark := s.AddSubMenuItemCheckbox("CPU sparkline in bar", "", cfg.ShowSparkline)
+	spark.KeepMenuOpen()
 	go func() {
 		for range spark.ClickedCh {
 			var on bool
@@ -144,6 +151,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 
 	// автозапуск при логине
 	login := s.AddSubMenuItemCheckbox("Start at login", "", cfg.StartAtLogin)
+	login.KeepMenuOpen()
 	go func() {
 		for range login.ClickedCh {
 			var on bool

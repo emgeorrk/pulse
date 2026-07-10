@@ -147,6 +147,11 @@ func addSeparator(id uint32, parent uint32) {
 	C.add_separator(C.int(id), C.int(parent))
 }
 
+// PATCH(pulse): attach a keep-open view so a click doesn't dismiss the menu.
+func keepMenuOpen(item *MenuItem) {
+	C.set_menu_item_keep_open(C.int(item.id))
+}
+
 func hideMenuItem(item *MenuItem) {
 	C.hide_menu_item(
 		C.int(item.id),

@@ -71,6 +71,150 @@ withParentMenuId: (int)theParentMenuId
 @end
 
 
+// PATCH(pulse): view-backed menu row that keeps the menu open on click.
+// AppKit dismisses the whole menu when a plain NSMenuItem fires its action;
+// an item with a custom view owns mouse handling, and the menu only closes
+// if the view asks for it — this view never does. Title, checkmark and
+// hover highlight are drawn by the view, so [sync] must be called whenever
+// the underlying NSMenuItem changes.
+static const CGFloat kPulseItemHeight = 22;
+static const CGFloat kPulseHighlightInsetX = 5;
+static const CGFloat kPulseCheckX = 10;
+static const CGFloat kPulseCheckSize = 14;
+static const CGFloat kPulseTextX = 27;
+static const CGFloat kPulseTrailingPad = 14;
+
+@interface PulseKeepOpenItemView : NSView
+- (instancetype)initWithMenuItem:(NSMenuItem *)theItem;
+- (void)sync;
+@end
+
+@implementation PulseKeepOpenItemView
+{
+  __weak NSMenuItem *item;
+  NSVisualEffectView *highlight;
+  NSImageView *check;
+  NSTextField *label;
+}
+
+- (instancetype)initWithMenuItem:(NSMenuItem *)theItem {
+  self = [super initWithFrame:NSMakeRect(0, 0, 100, kPulseItemHeight)];
+  if (!self) {
+    return nil;
+  }
+  item = theItem;
+  self.autoresizingMask = NSViewWidthSizable;
+
+  highlight = [[NSVisualEffectView alloc] initWithFrame:NSInsetRect(self.bounds, kPulseHighlightInsetX, 0)];
+  highlight.material = NSVisualEffectMaterialSelection;
+  highlight.emphasized = YES;
+  highlight.state = NSVisualEffectStateActive;
+  highlight.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+  highlight.wantsLayer = YES;
+  highlight.layer.cornerRadius = 4;
+  highlight.layer.masksToBounds = YES;
+  highlight.autoresizingMask = NSViewWidthSizable;
+  highlight.hidden = YES;
+  [self addSubview:highlight];
+
+  NSImage *img = nil;
+  if (@available(macOS 11.0, *)) {
+    img = [NSImage imageWithSystemSymbolName:@"checkmark" accessibilityDescription:nil];
+    img = [img imageWithSymbolConfiguration:
+             [NSImageSymbolConfiguration configurationWithPointSize:11
+                                                             weight:NSFontWeightBold]];
+  }
+  if (img == nil) {
+    img = [NSImage imageNamed:NSImageNameMenuOnStateTemplate];
+  }
+  check = [NSImageView imageViewWithImage:img];
+  check.frame = NSMakeRect(kPulseCheckX,
+                           floor((kPulseItemHeight - kPulseCheckSize) / 2),
+                           kPulseCheckSize, kPulseCheckSize);
+  check.hidden = YES;
+  [self addSubview:check];
+
+  label = [NSTextField labelWithString:@""];
+  label.font = [NSFont menuFontOfSize:13];
+  label.lineBreakMode = NSLineBreakByClipping;
+  label.maximumNumberOfLines = 1;
+  [self addSubview:label];
+
+  return self;
+}
+
+- (void)sync {
+  NSMenuItem *it = item;
+  if (!it) {
+    return;
+  }
+  label.stringValue = it.title;
+  [label sizeToFit];
+  NSRect lf = label.frame;
+  lf.origin.x = kPulseTextX;
+  lf.origin.y = floor((kPulseItemHeight - NSHeight(lf)) / 2);
+  label.frame = lf;
+
+  check.hidden = (it.state != NSControlStateValueOn);
+  self.alphaValue = it.enabled ? 1.0 : 0.4;
+
+  // Grow-only so a shrinking live value doesn't make the open menu jitter.
+  CGFloat needed = kPulseTextX + NSWidth(lf) + kPulseTrailingPad;
+  if (needed > NSWidth(self.frame)) {
+    NSRect f = self.frame;
+    f.size.width = needed;
+    self.frame = f;
+  }
+}
+
+- (void)setHovered:(BOOL)hovered {
+  highlight.hidden = !hovered;
+  label.textColor = hovered ? [NSColor selectedMenuItemTextColor] : [NSColor labelColor];
+  check.contentTintColor = hovered ? [NSColor selectedMenuItemTextColor] : [NSColor labelColor];
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  for (NSTrackingArea *area in self.trackingAreas) {
+    [self removeTrackingArea:area];
+  }
+  NSTrackingArea *area = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:(NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect)
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:area];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  if (((NSMenuItem *)item).enabled) {
+    [self setHovered:YES];
+  }
+}
+
+- (void)mouseExited:(NSEvent *)event {
+  [self setHovered:NO];
+}
+
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (self.window == nil) { // menu closed — mouseExited may never arrive
+    [self setHovered:NO];
+  }
+}
+
+- (void)mouseUp:(NSEvent *)event {
+  NSMenuItem *it = item;
+  if (!it || !it.enabled) {
+    return;
+  }
+  // Deliberately no cancelTracking: the menu stays open, the Go side
+  // toggles the checkbox through the usual Check/Uncheck path.
+  systray_menu_item_selected([(NSNumber *)it.representedObject intValue]);
+}
+
+@end
+
 @interface SystrayAppDelegate: NSObject <NSApplicationDelegate, NSMenuDelegate>
   - (void) add_or_update_menu_item:(MenuItem*) item;
   - (IBAction)menuHandler:(id)sender;
@@ -241,6 +385,23 @@ withParentMenuId: (int)theParentMenuId
   if (menuItem.hasSubmenu) {
     [menuItem setAction:nil];
   }
+  // PATCH(pulse): view-backed rows draw title/state themselves.
+  if ([menuItem.view isKindOfClass:[PulseKeepOpenItemView class]]) {
+    [(PulseKeepOpenItemView *)menuItem.view sync];
+  }
+}
+
+// PATCH(pulse): swap a plain row for a view-backed one that keeps the menu
+// open on click (see PulseKeepOpenItemView).
+- (void)set_menu_item_keep_open:(NSNumber *)menuId
+{
+  NSMenuItem *menuItem = find_menu_item(menu, menuId);
+  if (menuItem == NULL || menuItem.hasSubmenu || menuItem.view != nil) {
+    return;
+  }
+  PulseKeepOpenItemView *view = [[PulseKeepOpenItemView alloc] initWithMenuItem:menuItem];
+  menuItem.view = view;
+  [view sync];
 }
 
 NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
@@ -456,6 +617,12 @@ void add_or_update_menu_item(int menuId, int parentMenuId, char* title, char* to
 void add_separator(int menuId, int parentId) {
   NSNumber *pId = [NSNumber numberWithInt:parentId];
   runInMainThread(@selector(add_separator:), (id)pId);
+}
+
+// PATCH(pulse): see PulseKeepOpenItemView.
+void set_menu_item_keep_open(int menuId) {
+  NSNumber *mId = [NSNumber numberWithInt:menuId];
+  runInMainThread(@selector(set_menu_item_keep_open:), (id)mId);
 }
 
 void hide_menu_item(int menuId) {
