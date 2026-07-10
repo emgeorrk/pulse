@@ -119,6 +119,15 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 	}
 
 	groups := []group{cpu, mem}
+	if caps.Temps {
+		groups = append(groups, tempGroup(caps.TempSensors))
+	}
+	if caps.Fans {
+		groups = append(groups, fanGroup(caps.FanCount))
+	}
+	if caps.Volts {
+		groups = append(groups, voltGroup(caps.VoltSensors))
+	}
 	if caps.Net {
 		groups = append(groups, netGroup(caps.NetIfaces))
 	}
@@ -126,6 +135,154 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 		groups = append(groups, diskGroup())
 	}
 	return groups
+}
+
+func tempGroup(sensorNames []string) group {
+	g := group{
+		emoji: "🌡",
+		label: "Temp",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.Temps == nil {
+				return "—"
+			}
+			if s.Temps.CPU > 0 {
+				return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
+			}
+			return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
+		},
+		metrics: []metric{
+			{
+				id:    "temp.cpu",
+				label: "CPU",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Temps == nil || s.Temps.CPU == 0 {
+						return "—"
+					}
+					return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Temps == nil || s.Temps.CPU == 0 {
+						return "—°"
+					}
+					return format.TempShort(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
+				},
+			},
+			{
+				id:    "temp.gpu",
+				label: "GPU",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Temps == nil || s.Temps.GPU == 0 {
+						return "—"
+					}
+					return format.Temp(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Temps == nil || s.Temps.GPU == 0 {
+						return "G—°"
+					}
+					return "G" + format.TempShort(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
+				},
+			},
+			{
+				id:    "temp.hottest",
+				label: "Hottest",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Temps == nil || s.Temps.Hottest.Name == "" {
+						return "—"
+					}
+					return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit) +
+						" (" + s.Temps.Hottest.Name + ")"
+				},
+			},
+		},
+	}
+	for _, name := range sensorNames {
+		name := name
+		g.metrics = append(g.metrics, metric{
+			id:    entity.MetricID("temp.sensor." + name),
+			label: name,
+			menu: func(s entity.Snapshot, c config.Config) string {
+				if s.Temps != nil {
+					for _, r := range s.Temps.All {
+						if r.Name == name {
+							return format.Temp(r.Value, c.TempUnit == config.Fahrenheit)
+						}
+					}
+				}
+				return "—"
+			},
+		})
+	}
+	return g
+}
+
+func fanGroup(count int) group {
+	g := group{
+		emoji: "🌀",
+		label: "Fans",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			max := 0.0
+			for _, f := range s.Fans {
+				if f.RPM > max {
+					max = f.RPM
+				}
+			}
+			return format.RPM(max)
+		},
+	}
+	for i := 0; i < count; i++ {
+		idx := i
+		g.metrics = append(g.metrics, metric{
+			id:    entity.MetricID(fmt.Sprintf("fan.%d", idx+1)),
+			label: fmt.Sprintf("Fan %d", idx+1),
+			menu: func(s entity.Snapshot, c config.Config) string {
+				if idx < len(s.Fans) {
+					f := s.Fans[idx]
+					if f.Max > 0 {
+						return fmt.Sprintf("%s (%s)", format.RPM(f.RPM), format.Percent(f.RPM/f.Max))
+					}
+					return format.RPM(f.RPM)
+				}
+				return "—"
+			},
+			bar: func(s entity.Snapshot, c config.Config) string {
+				if idx < len(s.Fans) {
+					return fmt.Sprintf("%drpm", int(s.Fans[idx].RPM))
+				}
+				return "—rpm"
+			},
+		})
+	}
+	return g
+}
+
+func voltGroup(sensorNames []string) group {
+	g := group{
+		emoji: "⚡",
+		label: "Voltage",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if len(s.Volts) == 0 {
+				return "—"
+			}
+			return format.Volts(s.Volts[0].Value)
+		},
+	}
+	for _, name := range sensorNames {
+		name := name
+		g.metrics = append(g.metrics, metric{
+			id:    entity.MetricID("volt.sensor." + name),
+			label: name,
+			menu: func(s entity.Snapshot, c config.Config) string {
+				for _, r := range s.Volts {
+					if r.Name == name {
+						return format.Volts(r.Value)
+					}
+				}
+				return "—"
+			},
+		})
+	}
+	return g
 }
 
 func netGroup(ifaces []string) group {

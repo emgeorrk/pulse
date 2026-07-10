@@ -99,19 +99,50 @@ type DiskStats struct {
 	WriteTotal uint64
 }
 
+// Reading — одно показание именованного сенсора (температура °C, вольты, …).
+type Reading struct {
+	Name  string
+	Value float64
+}
+
+// TempStats — агрегаты + все температурные сенсоры.
+type TempStats struct {
+	CPU     float64 // среднее по CPU-сенсорам; 0 = не определили
+	GPU     float64
+	Hottest Reading
+	All     []Reading
+}
+
+// Fan — один вентилятор: текущие обороты и паспортные пределы.
+type Fan struct {
+	Name string
+	RPM  float64
+	Min  float64
+	Max  float64
+}
+
 // Caps — какие группы метрик реально доступны на этом железе; недоступные
 // UI не показывает (правило CLAUDE.md: скрывать, а не падать).
 type Caps struct {
-	Net       bool
-	NetIfaces []string // интерфейсы с трафиком на момент старта
-	Disk      bool
+	Net         bool
+	NetIfaces   []string // интерфейсы с трафиком на момент старта
+	Disk        bool
+	Temps       bool
+	TempSensors []string // имена сенсоров на момент старта (строки меню)
+	Volts       bool
+	VoltSensors []string
+	Fans        bool
+	FanCount    int
 }
 
 // Snapshot — один кадр всех метрик, отправляемый в UI. Указатели — у групп,
 // которых может не быть на данном железе или в данном кадре.
 type Snapshot struct {
-	CPU  CPUStats
-	Mem  MemStats
-	Net  *NetStats
-	Disk *DiskStats
+	CPU   CPUStats
+	Mem   MemStats
+	Net   *NetStats
+	Disk  *DiskStats
+	Temps *TempStats
+	Volts []Reading
+	Fans  []Fan
 }

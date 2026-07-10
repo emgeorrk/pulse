@@ -30,6 +30,22 @@ type DiskSource interface {
 	IOTotals() (read, write uint64, err error)
 }
 
+// TempSource отдаёт показания всех температурных сенсоров в °C.
+// Реализации: HID sensor hub на Apple Silicon, SMC-ключи на Intel.
+type TempSource interface {
+	Temps() ([]entity.Reading, error)
+}
+
+// VoltSource отдаёт показания сенсоров напряжения в вольтах.
+type VoltSource interface {
+	Voltages() ([]entity.Reading, error)
+}
+
+// FanSource отдаёт обороты вентиляторов (SMC на обеих платформах).
+type FanSource interface {
+	Fans() ([]entity.Fan, error)
+}
+
 // Sources — собранные при старте источники; nil = недоступен на этом железе
 // (группа скрывается). CPU и Mem обязательны.
 type Sources struct {
@@ -37,4 +53,7 @@ type Sources struct {
 	Mem  MemSource
 	Net  NetSource
 	Disk DiskSource
+	Temp TempSource
+	Volt VoltSource
+	Fan  FanSource
 }

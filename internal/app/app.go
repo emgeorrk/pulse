@@ -26,8 +26,9 @@ func loadStore() *config.Store {
 	return config.Load(path)
 }
 
-// probe собирает доступные источники и Caps для UI.
-func probe() (sensors.Sources, entity.Caps, error) {
+// probe собирает доступные источники и Caps для UI. Каждый сенсор пробуется
+// реальным чтением: не отвечает — группа выключается, приложение живёт.
+func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	mem, err := sensors.NewMem()
 	if err != nil {
 		return sensors.Sources{}, entity.Caps{}, fmt.Errorf("memory sensor: %w", err)
@@ -53,6 +54,45 @@ func probe() (sensors.Sources, entity.Caps, error) {
 		caps.Disk = true
 	}
 
+	// ── температуры и вольтаж: пути Intel и Apple Silicon разные ──
+	if hw.IsAppleSilicon {
+		// Apple Silicon: HID sensor hub
+		if hid, err := sensors.NewHID(); err == nil {
+			if temps, err := hid.Temps(); err == nil {
+				src.Temp = hid
+				caps.Temps = true
+				for _, r := range temps {
+					caps.TempSensors = append(caps.TempSensors, r.Name)
+				}
+			}
+			if volts, err := hid.Voltages(); err == nil {
+				src.Volt = hid
+				caps.Volts = true
+				for _, r := range volts {
+					caps.VoltSensors = append(caps.VoltSensors, r.Name)
+				}
+			}
+		}
+	}
+
+	// SMC: вентиляторы на обеих платформах; температуры — Intel-путь
+	if smc, err := sensors.NewSMC(); err == nil {
+		if !hw.IsAppleSilicon {
+			if temps, err := smc.Temps(); err == nil {
+				src.Temp = smc
+				caps.Temps = true
+				for _, r := range temps {
+					caps.TempSensors = append(caps.TempSensors, r.Name)
+				}
+			}
+		}
+		if fans, err := smc.Fans(); err == nil {
+			src.Fan = smc
+			caps.Fans = true
+			caps.FanCount = len(fans)
+		}
+	}
+
 	return src, caps, nil
 }
 
@@ -61,7 +101,7 @@ func Run() error {
 	store := loadStore()
 	hw := sensors.ReadHWInfo()
 
-	src, caps, err := probe()
+	src, caps, err := probe(hw)
 	if err != nil {
 		return err
 	}
@@ -80,7 +120,7 @@ func RunOnce() error {
 	cfg := store.Get()
 	hw := sensors.ReadHWInfo()
 
-	src, _, err := probe()
+	src, _, err := probe(hw)
 	if err != nil {
 		return err
 	}
@@ -128,6 +168,37 @@ func RunOnce() error {
 			format.Bytes(snap.Disk.ReadTotal, dec), format.Bytes(snap.Disk.WriteTotal, dec))
 	} else {
 		fmt.Println("Disk: unavailable")
+	}
+
+	f := cfg.TempUnit == config.Fahrenheit
+	if snap.Temps != nil {
+		fmt.Printf("Temp: CPU %s · GPU %s · hottest %s (%s) · %d sensors\n",
+			format.Temp(snap.Temps.CPU, f), format.Temp(snap.Temps.GPU, f),
+			format.Temp(snap.Temps.Hottest.Value, f), snap.Temps.Hottest.Name,
+			len(snap.Temps.All))
+		for _, r := range snap.Temps.All {
+			fmt.Printf("  %-40s %s\n", r.Name, format.Temp(r.Value, f))
+		}
+	} else {
+		fmt.Println("Temp: unavailable")
+	}
+
+	if len(snap.Fans) > 0 {
+		for _, fan := range snap.Fans {
+			fmt.Printf("%s: %s (min %s, max %s)\n",
+				fan.Name, format.RPM(fan.RPM), format.RPM(fan.Min), format.RPM(fan.Max))
+		}
+	} else {
+		fmt.Println("Fans: unavailable")
+	}
+
+	if len(snap.Volts) > 0 {
+		fmt.Printf("Voltage: %d sensors\n", len(snap.Volts))
+		for _, r := range snap.Volts {
+			fmt.Printf("  %-40s %s\n", r.Name, format.Volts(r.Value))
+		}
+	} else {
+		fmt.Println("Voltage: unavailable")
 	}
 
 	return nil

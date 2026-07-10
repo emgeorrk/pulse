@@ -143,6 +143,23 @@ func (m *Monitor) sample() entity.Snapshot {
 		}
 	}
 
+	if m.src.Temp != nil {
+		if all, err := m.src.Temp.Temps(); err == nil {
+			t := AggregateTemps(all)
+			snap.Temps = &t
+		}
+	}
+	if m.src.Volt != nil {
+		if volts, err := m.src.Volt.Voltages(); err == nil {
+			snap.Volts = volts
+		}
+	}
+	if m.src.Fan != nil {
+		if fans, err := m.src.Fan.Fans(); err == nil {
+			snap.Fans = fans
+		}
+	}
+
 	return snap
 }
 
