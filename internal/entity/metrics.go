@@ -2,6 +2,10 @@
 // данных и UI.
 package entity
 
+// MetricID — стабильный идентификатор метрики для пиннинга в menu bar и
+// настроек: "cpu.total", "mem.used", "temp.cpu", "fan.1", "net.down", …
+type MetricID string
+
 // CoreTicks — накопительные тики загрузки одного ядра из Mach
 // PROCESSOR_CPU_LOAD_INFO. В ядре это 32-битные счётчики: переполняются по
 // модулю 2^32, поэтому дельты считаются в арифметике uint32.
@@ -14,8 +18,9 @@ type CoreTicks struct {
 
 // CPUStats — загрузка CPU за интервал между двумя сэмплами, доли 0..1.
 type CPUStats struct {
-	Total float64
-	Cores []float64
+	Total   float64
+	Cores   []float64
+	History []float64 // последние значения Total (старые → новые), для спарклайна
 }
 
 // MemStats — состояние физической памяти и свопа, в байтах.

@@ -6,30 +6,39 @@ import (
 	"context"
 	"time"
 
+	"github.com/emgeorrk/pulse/config"
 	"github.com/emgeorrk/pulse/internal/entity"
 	"github.com/emgeorrk/pulse/internal/sensors"
 )
 
+// historyLen — сколько последних значений CPU хранить для спарклайна.
+const historyLen = 12
+
 type Monitor struct {
-	cpu      sensors.CPUSource
-	mem      sensors.MemSource
-	interval time.Duration
+	cpu   sensors.CPUSource
+	mem   sensors.MemSource
+	store *config.Store
 }
 
-func NewMonitor(cpu sensors.CPUSource, mem sensors.MemSource, interval time.Duration) *Monitor {
-	return &Monitor{cpu: cpu, mem: mem, interval: interval}
+func NewMonitor(cpu sensors.CPUSource, mem sensors.MemSource, store *config.Store) *Monitor {
+	return &Monitor{cpu: cpu, mem: mem, store: store}
 }
 
 // Start запускает цикл сэмплирования в отдельной горутине (никогда не на
 // UI-потоке). Первый кадр приходит через interval — сразу с осмысленной
-// дельтой CPU. Канал закрывается при отмене ctx.
+// дельтой CPU. Интервал перечитывается из настроек на каждом тике, так что
+// смена в Settings подхватывается без рестарта. Канал закрывается при
+// отмене ctx.
 func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 	out := make(chan entity.Snapshot, 1)
 	go func() {
 		defer close(out)
 
 		prev, _ := m.cpu.Ticks() // точка отсчёта для первой дельты
-		ticker := time.NewTicker(m.interval)
+		history := make([]float64, 0, historyLen)
+
+		interval := m.store.Get().Interval()
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
 		for {
@@ -39,12 +48,24 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 			case <-ticker.C:
 			}
 
+			if cur := m.store.Get().Interval(); cur != interval {
+				interval = cur
+				ticker.Reset(interval)
+			}
+
 			var snap entity.Snapshot
 			if cur, err := m.cpu.Ticks(); err == nil {
 				if prev != nil {
 					snap.CPU = CPUUsage(prev, cur)
 				}
 				prev = cur
+
+				if len(history) == historyLen {
+					copy(history, history[1:])
+					history = history[:historyLen-1]
+				}
+				history = append(history, snap.CPU.Total)
+				snap.CPU.History = append([]float64(nil), history...)
 			}
 			if ms, err := m.mem.Read(); err == nil {
 				snap.Mem = ms
