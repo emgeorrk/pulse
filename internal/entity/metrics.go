@@ -123,15 +123,15 @@ type Fan struct {
 
 // BatteryStats — состояние батареи из IORegistry (AppleSmartBattery).
 type BatteryStats struct {
-	Percent    float64 // 0..1
-	Health     float64 // 0..1, фактическая ёмкость к паспортной
-	Cycles     int
-	TempC      float64
-	Volts      float64
-	Watts      float64 // >0 заряд, <0 разряд
-	Charging   bool
-	External   bool // питание от сети
-	MinutesLeft int // до разряда (или до полного заряда при зарядке); -1 = неизвестно
+	Percent     float64 // 0..1
+	Health      float64 // 0..1, фактическая ёмкость к паспортной
+	Cycles      int
+	TempC       float64
+	Volts       float64
+	Watts       float64 // >0 заряд, <0 разряд
+	Charging    bool
+	External    bool // питание от сети
+	MinutesLeft int  // до разряда (или до полного заряда при зарядке); -1 = неизвестно
 }
 
 // GPUStats — загрузка GPU из IOAccelerator PerformanceStatistics.
@@ -147,21 +147,30 @@ type PowerStats struct {
 	Total float64
 }
 
+// FreqStats — средневзвешенная частота CPU по кластерам (IOReport perf
+// states × таблицы частот из device tree).
+type FreqStats struct {
+	Clusters []Reading // "E-cores"/"P-cores", Гц
+	Max      float64   // максимум по кластерам — текущая рабочая частота
+}
+
 // Caps — какие группы метрик реально доступны на этом железе; недоступные
 // UI не показывает (правило CLAUDE.md: скрывать, а не падать).
 type Caps struct {
-	Net         bool
-	NetIfaces   []string // интерфейсы с трафиком на момент старта
-	Disk        bool
-	Temps       bool
-	TempSensors []string // имена сенсоров на момент старта (строки меню)
-	Volts       bool
-	VoltSensors []string
-	Fans        bool
-	FanCount    int
-	Battery     bool
-	GPU         bool
-	Power       bool
+	Net          bool
+	NetIfaces    []string // интерфейсы с трафиком на момент старта
+	Disk         bool
+	Temps        bool
+	TempSensors  []string // имена сенсоров на момент старта (строки меню)
+	Volts        bool
+	VoltSensors  []string
+	Fans         bool
+	FanCount     int
+	Battery      bool
+	GPU          bool
+	Power        bool
+	Freq         bool
+	FreqClusters []string // имена кластерных каналов (MCPU0/PCPU/…)
 }
 
 // Snapshot — один кадр всех метрик, отправляемый в UI. Указатели — у групп,
@@ -177,4 +186,5 @@ type Snapshot struct {
 	Battery *BatteryStats
 	GPU     *GPUStats
 	Power   *PowerStats
+	Freq    *FreqStats
 }

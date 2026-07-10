@@ -54,9 +54,9 @@ func TestNetRates(t *testing.T) {
 		"wrap": {Name: "wrap", Rx: math.MaxUint32 - 99, Tx: 0},
 	}
 	cur := []entity.NetCounters{
-		{Name: "en0", Rx: 3000, Tx: 1500},  // +2000 rx, +1000 tx за 2 c
-		{Name: "wrap", Rx: 100, Tx: 0},     // переполнение: дельта 200
-		{Name: "utun9", Rx: 999, Tx: 999},  // новый интерфейс — пропускаем до следующего тика
+		{Name: "en0", Rx: 3000, Tx: 1500}, // +2000 rx, +1000 tx за 2 c
+		{Name: "wrap", Rx: 100, Tx: 0},    // переполнение: дельта 200
+		{Name: "utun9", Rx: 999, Tx: 999}, // новый интерфейс — пропускаем до следующего тика
 	}
 
 	got := NetRates(prev, cur, 2)

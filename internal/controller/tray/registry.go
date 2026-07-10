@@ -4,6 +4,7 @@ package tray
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/emgeorrk/pulse/config"
 	"github.com/emgeorrk/pulse/internal/entity"
@@ -49,6 +50,42 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 				},
 			},
 		},
+	}
+	if caps.Freq {
+		cpu.metrics = append(cpu.metrics,
+			metric{
+				id:    "cpu.freq",
+				label: "Frequency",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Freq == nil {
+						return "—"
+					}
+					return format.Hertz(s.Freq.Max)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Freq == nil {
+						return "—GHz"
+					}
+					return strings.ReplaceAll(format.Hertz(s.Freq.Max), " ", "")
+				},
+			})
+		for _, cl := range caps.FreqClusters {
+			cl := cl
+			cpu.metrics = append(cpu.metrics, metric{
+				id:    entity.MetricID("cpu.freq." + cl),
+				label: cl,
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Freq != nil {
+						for _, r := range s.Freq.Clusters {
+							if r.Name == cl {
+								return format.Hertz(r.Value)
+							}
+						}
+					}
+					return "—"
+				},
+			})
+		}
 	}
 	for i := 0; i < hw.NumCores; i++ {
 		core := i // капчурим индекс

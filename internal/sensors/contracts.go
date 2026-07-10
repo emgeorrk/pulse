@@ -62,6 +62,12 @@ type PowerSource interface {
 	Power() (entity.PowerStats, error)
 }
 
+// FreqSource отдаёт средневзвешенную частоту CPU по кластерам
+// (IOReport performance states — только Apple Silicon, best effort).
+type FreqSource interface {
+	Frequency() (entity.FreqStats, error)
+}
+
 // Sources — собранные при старте источники; nil = недоступен на этом железе
 // (группа скрывается). CPU и Mem обязательны.
 type Sources struct {
@@ -75,4 +81,5 @@ type Sources struct {
 	Battery BatterySource
 	GPU     GPUSource
 	Power   PowerSource
+	Freq    FreqSource
 }

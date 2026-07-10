@@ -108,6 +108,11 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	if ior, err := sensors.NewIOReport(); err == nil {
 		src.Power = ior
 		caps.Power = true
+		if ior.HasFreq() {
+			src.Freq = ior
+			caps.Freq = true
+			caps.FreqClusters = ior.FreqClusters()
+		}
 	}
 
 	return src, caps, nil
@@ -160,6 +165,15 @@ func RunOnce() error {
 		hw.Chip, hw.Model, hw.OSVersion, hw.NumCores, hw.IsAppleSilicon)
 	fmt.Printf("CPU total: %s (за %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
 	fmt.Printf("CPU cores: %s\n", strings.Join(perCore, " "))
+	if snap.Freq != nil {
+		fmt.Printf("CPU freq: %s", format.Hertz(snap.Freq.Max))
+		for _, r := range snap.Freq.Clusters {
+			fmt.Printf(" · %s %s", r.Name, format.Hertz(r.Value))
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("CPU freq: unavailable")
+	}
 	fmt.Printf("Mem: used %s / %s (%s), available %s, free %s\n",
 		format.Bytes(snap.Mem.Used, dec), format.Bytes(snap.Mem.Total, dec),
 		format.Percent(snap.Mem.UsedFraction()),

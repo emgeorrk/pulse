@@ -175,6 +175,11 @@ func (m *Monitor) sample() entity.Snapshot {
 			snap.Power = &p
 		}
 	}
+	if m.src.Freq != nil {
+		if f, err := m.src.Freq.Frequency(); err == nil {
+			snap.Freq = &f
+		}
+	}
 
 	return snap
 }
