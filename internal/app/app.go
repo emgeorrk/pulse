@@ -93,6 +93,23 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 		}
 	}
 
+	batt := sensors.NewBattery()
+	if _, err := batt.Battery(); err == nil {
+		src.Battery = batt
+		caps.Battery = true
+	}
+
+	gpu := sensors.NewGPU()
+	if _, err := gpu.GPU(); err == nil {
+		src.GPU = gpu
+		caps.GPU = true
+	}
+
+	if ior, err := sensors.NewIOReport(); err == nil {
+		src.Power = ior
+		caps.Power = true
+	}
+
 	return src, caps, nil
 }
 
@@ -199,6 +216,35 @@ func RunOnce() error {
 		}
 	} else {
 		fmt.Println("Voltage: unavailable")
+	}
+
+	if snap.GPU != nil {
+		fmt.Printf("GPU: %s\n", format.Percent(snap.GPU.Utilization))
+	} else {
+		fmt.Println("GPU: unavailable")
+	}
+
+	if snap.Power != nil {
+		fmt.Printf("Power: total %s · CPU %s · GPU %s · ANE %s\n",
+			format.Watts(snap.Power.Total), format.Watts(snap.Power.CPU),
+			format.Watts(snap.Power.GPU), format.Watts(snap.Power.ANE))
+	} else {
+		fmt.Println("Power: unavailable")
+	}
+
+	if snap.Battery != nil {
+		b := snap.Battery
+		state := "discharging"
+		if b.Charging {
+			state = "charging"
+		} else if b.External {
+			state = "AC"
+		}
+		fmt.Printf("Battery: %s (%s) · health %s · %d cycles · %s · %s · %s\n",
+			format.Percent(b.Percent), state, format.Percent(b.Health), b.Cycles,
+			format.Temp(b.TempC, f), format.Volts(b.Volts), format.Watts(b.Watts))
+	} else {
+		fmt.Println("Battery: unavailable")
 	}
 
 	return nil

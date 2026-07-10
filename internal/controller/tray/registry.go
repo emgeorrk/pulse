@@ -134,7 +134,195 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 	if caps.Disk {
 		groups = append(groups, diskGroup())
 	}
+	if caps.GPU {
+		groups = append(groups, gpuGroup())
+	}
+	if caps.Power {
+		groups = append(groups, powerGroup())
+	}
+	if caps.Battery {
+		groups = append(groups, batteryGroup())
+	}
 	return groups
+}
+
+func gpuGroup() group {
+	return group{
+		emoji: "🎮",
+		label: "GPU",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.GPU == nil {
+				return "—"
+			}
+			return format.Percent(s.GPU.Utilization)
+		},
+		metrics: []metric{
+			{
+				id:    "gpu.usage",
+				label: "Usage",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.GPU == nil {
+						return "—"
+					}
+					return format.Percent(s.GPU.Utilization)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.GPU == nil {
+						return "GPU —"
+					}
+					return "GPU " + format.Percent(s.GPU.Utilization)
+				},
+			},
+		},
+	}
+}
+
+func powerGroup() group {
+	watts := func(get func(*entity.PowerStats) float64) func(entity.Snapshot, config.Config) string {
+		return func(s entity.Snapshot, c config.Config) string {
+			if s.Power == nil {
+				return "—"
+			}
+			return format.Watts(get(s.Power))
+		}
+	}
+	return group{
+		emoji: "🔌",
+		label: "Power",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.Power == nil {
+				return "—"
+			}
+			return format.Watts(s.Power.Total)
+		},
+		metrics: []metric{
+			{
+				id:    "power.total",
+				label: "Total",
+				menu:  watts(func(p *entity.PowerStats) float64 { return p.Total }),
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Power == nil {
+						return "—W"
+					}
+					return format.Watts(s.Power.Total)
+				},
+			},
+			{id: "power.cpu", label: "CPU", menu: watts(func(p *entity.PowerStats) float64 { return p.CPU })},
+			{id: "power.gpu", label: "GPU", menu: watts(func(p *entity.PowerStats) float64 { return p.GPU })},
+			{id: "power.ane", label: "ANE", menu: watts(func(p *entity.PowerStats) float64 { return p.ANE })},
+		},
+	}
+}
+
+func batteryGroup() group {
+	return group{
+		emoji: "🔋",
+		label: "Battery",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.Battery == nil {
+				return "—"
+			}
+			state := ""
+			if s.Battery.Charging {
+				state = " ⚡"
+			}
+			return format.Percent(s.Battery.Percent) + state
+		},
+		metrics: []metric{
+			{
+				id:    "batt.pct",
+				label: "Charge",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil {
+						return "—"
+					}
+					return format.Percent(s.Battery.Percent)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil {
+						return "BAT —"
+					}
+					return "BAT " + format.Percent(s.Battery.Percent)
+				},
+			},
+			{
+				id:    "batt.state",
+				label: "State",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					switch {
+					case s.Battery == nil:
+						return "—"
+					case s.Battery.Charging:
+						return "Charging"
+					case s.Battery.External:
+						return "AC power"
+					default:
+						return "Discharging"
+					}
+				},
+			},
+			{
+				id:    "batt.time",
+				label: "Time left",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil || s.Battery.MinutesLeft < 0 {
+						return "—"
+					}
+					return fmt.Sprintf("%dh %02dm", s.Battery.MinutesLeft/60, s.Battery.MinutesLeft%60)
+				},
+			},
+			{
+				id:    "batt.power",
+				label: "Power rate",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil {
+						return "—"
+					}
+					return format.Watts(s.Battery.Watts)
+				},
+			},
+			{
+				id:    "batt.health",
+				label: "Health",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil || s.Battery.Health == 0 {
+						return "—"
+					}
+					return format.Percent(s.Battery.Health)
+				},
+			},
+			{
+				id:    "batt.cycles",
+				label: "Cycles",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil {
+						return "—"
+					}
+					return fmt.Sprintf("%d", s.Battery.Cycles)
+				},
+			},
+			{
+				id:    "batt.temp",
+				label: "Temperature",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil {
+						return "—"
+					}
+					return format.Temp(s.Battery.TempC, c.TempUnit == config.Fahrenheit)
+				},
+			},
+			{
+				id:    "batt.volts",
+				label: "Voltage",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil {
+						return "—"
+					}
+					return format.Volts(s.Battery.Volts)
+				},
+			},
+		},
+	}
 }
 
 func tempGroup(sensorNames []string) group {

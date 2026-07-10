@@ -46,14 +46,33 @@ type FanSource interface {
 	Fans() ([]entity.Fan, error)
 }
 
+// BatterySource отдаёт состояние батареи (IORegistry AppleSmartBattery).
+type BatterySource interface {
+	Battery() (entity.BatteryStats, error)
+}
+
+// GPUSource отдаёт загрузку GPU (IOAccelerator PerformanceStatistics).
+type GPUSource interface {
+	GPU() (entity.GPUStats, error)
+}
+
+// PowerSource отдаёт мощность CPU/GPU/ANE в ваттах, усреднённую с прошлого
+// вызова (IOReport Energy Model — накопительные счётчики энергии).
+type PowerSource interface {
+	Power() (entity.PowerStats, error)
+}
+
 // Sources — собранные при старте источники; nil = недоступен на этом железе
 // (группа скрывается). CPU и Mem обязательны.
 type Sources struct {
-	CPU  CPUSource
-	Mem  MemSource
-	Net  NetSource
-	Disk DiskSource
-	Temp TempSource
-	Volt VoltSource
-	Fan  FanSource
+	CPU     CPUSource
+	Mem     MemSource
+	Net     NetSource
+	Disk    DiskSource
+	Temp    TempSource
+	Volt    VoltSource
+	Fan     FanSource
+	Battery BatterySource
+	GPU     GPUSource
+	Power   PowerSource
 }

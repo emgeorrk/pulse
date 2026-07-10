@@ -160,6 +160,22 @@ func (m *Monitor) sample() entity.Snapshot {
 		}
 	}
 
+	if m.src.Battery != nil {
+		if b, err := m.src.Battery.Battery(); err == nil {
+			snap.Battery = &b
+		}
+	}
+	if m.src.GPU != nil {
+		if g, err := m.src.GPU.GPU(); err == nil {
+			snap.GPU = &g
+		}
+	}
+	if m.src.Power != nil {
+		if p, err := m.src.Power.Power(); err == nil {
+			snap.Power = &p
+		}
+	}
+
 	return snap
 }
 

@@ -121,6 +121,32 @@ type Fan struct {
 	Max  float64
 }
 
+// BatteryStats — состояние батареи из IORegistry (AppleSmartBattery).
+type BatteryStats struct {
+	Percent    float64 // 0..1
+	Health     float64 // 0..1, фактическая ёмкость к паспортной
+	Cycles     int
+	TempC      float64
+	Volts      float64
+	Watts      float64 // >0 заряд, <0 разряд
+	Charging   bool
+	External   bool // питание от сети
+	MinutesLeft int // до разряда (или до полного заряда при зарядке); -1 = неизвестно
+}
+
+// GPUStats — загрузка GPU из IOAccelerator PerformanceStatistics.
+type GPUStats struct {
+	Utilization float64 // 0..1
+}
+
+// PowerStats — мощность по каналам IOReport Energy Model, Вт.
+type PowerStats struct {
+	CPU   float64
+	GPU   float64
+	ANE   float64
+	Total float64
+}
+
 // Caps — какие группы метрик реально доступны на этом железе; недоступные
 // UI не показывает (правило CLAUDE.md: скрывать, а не падать).
 type Caps struct {
@@ -133,16 +159,22 @@ type Caps struct {
 	VoltSensors []string
 	Fans        bool
 	FanCount    int
+	Battery     bool
+	GPU         bool
+	Power       bool
 }
 
 // Snapshot — один кадр всех метрик, отправляемый в UI. Указатели — у групп,
 // которых может не быть на данном железе или в данном кадре.
 type Snapshot struct {
-	CPU   CPUStats
-	Mem   MemStats
-	Net   *NetStats
-	Disk  *DiskStats
-	Temps *TempStats
-	Volts []Reading
-	Fans  []Fan
+	CPU     CPUStats
+	Mem     MemStats
+	Net     *NetStats
+	Disk    *DiskStats
+	Temps   *TempStats
+	Volts   []Reading
+	Fans    []Fan
+	Battery *BatteryStats
+	GPU     *GPUStats
+	Power   *PowerStats
 }
