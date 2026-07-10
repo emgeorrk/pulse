@@ -1,0 +1,9 @@
+# артефакты сборки (bin/pulse, bin/Pulse.app)
+bin/
+
+# IDE
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
