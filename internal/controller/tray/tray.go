@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"fyne.io/systray"
 
@@ -33,13 +34,14 @@ type Tray struct {
 	groups []groupUI
 	bar    map[entity.MetricID]metric // metrics by id, for rendering in the menu bar
 
-	mu   sync.Mutex
-	last entity.Snapshot
-	seen bool // whether at least one frame has been received
+	mu      sync.Mutex
+	last    entity.Snapshot
+	seen    bool // whether at least one frame has been received
+	loading bool // startup heartbeat animation owns the title
 }
 
 func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
-	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}}
+	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}, loading: true}
 	for _, g := range buildGroups(hw, caps) {
 		t.groups = append(t.groups, groupUI{group: g})
 		for _, m := range g.metrics {
@@ -55,12 +57,13 @@ func (t *Tray) Run(start func(ctx context.Context) <-chan entity.Snapshot) {
 	ctx, cancel := context.WithCancel(context.Background())
 	systray.Run(func() {
 		t.build()
+		go t.animate(ctx)
 		go t.consume(start(ctx))
 	}, cancel)
 }
 
 func (t *Tray) build() {
-	systray.SetTitle("pulse …")
+	systray.SetTitle(restFrame)
 	systray.SetTooltip("pulse — system monitor")
 
 	cfg := t.store.Get()
@@ -189,6 +192,45 @@ func (t *Tray) watchPin(id entity.MetricID, item *systray.MenuItem) {
 	}
 }
 
+// The startup heartbeat: a "lub-dub" cycle of monochrome text glyphs
+// (VS15 on the filled heart keeps it from rendering as color emoji).
+// restFrame is also the initial title so the bar is never blank.
+const restFrame = "♡"
+
+var heartbeat = []struct {
+	frame string
+	d     time.Duration
+}{
+	{"♥︎", 180 * time.Millisecond}, // lub
+	{restFrame, 120 * time.Millisecond},
+	{"♥︎", 180 * time.Millisecond},      // dub
+	{restFrame, 620 * time.Millisecond}, // diastole
+}
+
+// animate beats the heart in the title until the first snapshot arrives.
+// It only checks for that at the end of a full cycle, so a beat is never
+// cut short; render skips the title while loading is set.
+func (t *Tray) animate(ctx context.Context) {
+	for {
+		for _, f := range heartbeat {
+			systray.SetTitle(f.frame)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(f.d):
+			}
+		}
+		t.mu.Lock()
+		done := t.seen
+		t.loading = !done
+		t.mu.Unlock()
+		if done {
+			t.refresh()
+			return
+		}
+	}
+}
+
 func (t *Tray) consume(ch <-chan entity.Snapshot) {
 	for snap := range ch {
 		t.mu.Lock()
@@ -212,7 +254,12 @@ func (t *Tray) refresh() {
 
 func (t *Tray) render(s entity.Snapshot) {
 	cfg := t.store.Get()
-	systray.SetTitle(t.title(s, cfg))
+	t.mu.Lock()
+	loading := t.loading
+	t.mu.Unlock()
+	if !loading { // while loading, the heartbeat animation owns the title
+		systray.SetTitle(t.title(s, cfg))
+	}
 
 	for gi := range t.groups {
 		g := &t.groups[gi]
