@@ -6,42 +6,82 @@ import (
 	"testing"
 )
 
-func TestLoadMissingFileGivesDefaults(t *testing.T) {
-	s := Load(filepath.Join(t.TempDir(), "nope", "config.json"))
-	c := s.Get()
-	if c.IntervalSec != 2 || c.TempUnit != Celsius || !c.ShowSparkline {
-		t.Errorf("defaults broken: %+v", c)
+func TestLoad(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		content      string // written to the config file; empty means the file is missing
+		wantStyle    VisualStyle
+		wantBar      BarLabelStyle
+		wantDefaults bool // expect full defaults(): sparkline on, default pins
+	}{
+		{
+			name:         "missing file gives defaults",
+			wantStyle:    VisualEmoji,
+			wantBar:      BarText,
+			wantDefaults: true,
+		},
+		{
+			name:         "corrupt file gives defaults",
+			content:      "{not json",
+			wantStyle:    VisualEmoji,
+			wantBar:      BarText,
+			wantDefaults: true,
+		},
+		{
+			// A config written by an older version (or hand-edited to junk) must
+			// normalize the style fields instead of leaking unknown values into the UI.
+			name:      "junk style values normalized",
+			content:   `{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`,
+			wantStyle: VisualEmoji,
+			wantBar:   BarText,
+		},
+		{
+			name:      "valid style values kept",
+			content:   `{"interval_sec":2,"visual_style":"gnome","bar_labels":"visual"}`,
+			wantStyle: VisualGnome,
+			wantBar:   BarVisual,
+		},
 	}
-	if c.VisualStyle != VisualEmoji || c.BarLabels != BarText {
-		t.Errorf("style defaults broken: %+v", c)
-	}
-	if !c.IsPinned("cpu.total") || !c.IsPinned("mem.used") {
-		t.Errorf("default pins broken: %v", c.Pinned)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			if tt.content != "" {
+				if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			c := Load(path).Get()
+
+			if c.IntervalSec != 2 || c.TempUnit != Celsius {
+				t.Errorf("interval/unit = %d/%s, want 2/%s", c.IntervalSec, c.TempUnit, Celsius)
+			}
+
+			if c.VisualStyle != tt.wantStyle || c.BarLabels != tt.wantBar {
+				t.Errorf("style = %s/%s, want %s/%s", c.VisualStyle, c.BarLabels, tt.wantStyle, tt.wantBar)
+			}
+
+			if tt.wantDefaults {
+				if !c.ShowSparkline {
+					t.Error("ShowSparkline = false, want default true")
+				}
+
+				if !c.IsPinned("cpu.total") || !c.IsPinned("mem.used") {
+					t.Errorf("default pins broken: %v", c.Pinned)
+				}
+			}
+		})
 	}
 }
 
-// A config written by an older version (or hand-edited to junk) must
-// normalize the style fields instead of leaking unknown values into the UI.
-func TestLoadNormalizesStyleFields(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := Load(path).Get()
-	if c.VisualStyle != VisualEmoji || c.BarLabels != BarText {
-		t.Errorf("junk style values not normalized: %+v", c)
-	}
+// A single persist-and-reload scenario, so no table here.
+func TestUpdate(t *testing.T) {
+	t.Parallel()
 
-	if err := os.WriteFile(path, []byte(`{"interval_sec":2,"visual_style":"gnome","bar_labels":"visual"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c = Load(path).Get()
-	if c.VisualStyle != VisualGnome || c.BarLabels != BarVisual {
-		t.Errorf("valid style values not kept: %+v", c)
-	}
-}
-
-func TestUpdatePersistsAndReloads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 
 	s := Load(path)
@@ -55,34 +95,34 @@ func TestUpdatePersistsAndReloads(t *testing.T) {
 	}
 }
 
+// A sequential pin/unpin scenario over shared state, so no table here.
 func TestTogglePin(t *testing.T) {
+	t.Parallel()
+
 	s := Load(filepath.Join(t.TempDir(), "config.json"))
 
 	if pinned := s.TogglePin("temp.cpu"); !pinned {
 		t.Error("first toggle should pin")
 	}
+
 	if !s.Get().IsPinned("temp.cpu") {
 		t.Error("temp.cpu should be pinned")
 	}
+
 	if pinned := s.TogglePin("temp.cpu"); pinned {
 		t.Error("second toggle should unpin")
 	}
+
 	if s.Get().IsPinned("temp.cpu") {
 		t.Error("temp.cpu should be unpinned")
 	}
+
 	// pin order is preserved
 	s.TogglePin("a")
 	s.TogglePin("b")
+
 	got := s.Get().Pinned
 	if got[len(got)-2] != "a" || got[len(got)-1] != "b" {
 		t.Errorf("pin order broken: %v", got)
-	}
-}
-
-func TestLoadCorruptFileGivesDefaults(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	os.WriteFile(path, []byte("{not json"), 0o644)
-	if c := Load(path).Get(); c.IntervalSec != 2 {
-		t.Errorf("corrupt file should give defaults, got %+v", c)
 	}
 }

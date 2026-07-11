@@ -4,7 +4,7 @@ BINARY   := $(BIN_DIR)/pulse
 BUNDLE   := $(BIN_DIR)/$(APP_NAME).app
 PLIST    := build/darwin/Info.plist
 
-.PHONY: all build bundle sign run once test vet clean help
+.PHONY: all build bundle sign run once generate test vet lint lint-fix clean help
 
 all: sign ### build and sign the .app (default)
 
@@ -26,11 +26,20 @@ run: sign ### build, sign, and launch
 once: build ### print one metrics frame to stdout (sensor check without UI)
 	$(BINARY) -once
 
+generate: ### regenerate gomock mocks (go tool mockgen)
+	go generate ./...
+
 test: ### unit tests
 	go test ./...
 
 vet: ### static analysis
 	go vet ./...
+
+lint: ### golangci-lint
+	golangci-lint run
+
+lint-fix: ### golangci-lint with autofix
+	golangci-lint run --fix
 
 clean: ### remove build artifacts
 	rm -rf $(BIN_DIR)

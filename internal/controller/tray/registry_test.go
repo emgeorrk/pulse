@@ -32,20 +32,34 @@ func fullCaps() entity.Caps {
 // — even on an empty frame, before any sensor data has arrived (regression:
 // entries without a bar func used to ignore clicks).
 func TestEveryMetricRendersInBar(t *testing.T) {
-	hw := entity.HWInfo{NumCores: 2}
-	cfg := config.Config{}
+	t.Parallel()
 
-	for _, snap := range []entity.Snapshot{{}, sampleSnapshot()} {
-		for _, g := range buildGroups(hw, fullCaps()) {
-			for _, m := range g.metrics {
-				if got := m.barValue(snap, cfg); got == "" {
-					t.Errorf("%s: empty barValue", m.id)
-				}
-				if got := m.menu(snap, cfg); got == "" {
-					t.Errorf("%s: empty menu", m.id)
+	tests := []struct {
+		name string
+		snap entity.Snapshot
+	}{
+		{name: "empty frame", snap: entity.Snapshot{}},
+		{name: "sample frame", snap: sampleSnapshot()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			hw := entity.HWInfo{NumCores: 2}
+			cfg := config.Config{}
+
+			for _, g := range buildGroups(hw, fullCaps()) {
+				for _, m := range g.metrics {
+					if got := m.barValue(tt.snap, cfg); got == "" {
+						t.Errorf("%s: empty barValue", m.id)
+					}
+
+					if got := m.menu(tt.snap, cfg); got == "" {
+						t.Errorf("%s: empty menu", m.id)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 
@@ -53,6 +67,8 @@ func TestEveryMetricRendersInBar(t *testing.T) {
 // qualifier next to the group emoji, gnome mode swaps to icon keys and
 // drops the qualifier when the icon itself is metric-specific.
 func TestBarPartStyles(t *testing.T) {
+	t.Parallel()
+
 	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
 	snap := sampleSnapshot()
 
@@ -60,51 +76,63 @@ func TestBarPartStyles(t *testing.T) {
 	emoji := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualEmoji}
 	gnome := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualGnome}
 
-	cases := []struct {
+	tests := []struct {
+		name     string
 		id       entity.MetricID
 		cfg      config.Config
 		wantIcon string
 		prefix   string // expected text before the bar value
 	}{
-		{"cpu.total", text, "", "CPU "},
-		{"cpu.total", emoji, "", "⚙️ "},
-		{"cpu.total", gnome, "cpu", " "},
-		{"net.down", text, "", "↓"},
-		{"net.down", emoji, "", "📶 ↓"},
-		{"net.down", gnome, "network-download", " "}, // own icon → no ↓
-		{"swap.used", text, "", "SW "},
-		{"swap.used", emoji, "", "🧠 SW "},
-		{"swap.used", gnome, "memory", " SW "}, // group icon → keep SW
-		{"mem.used", text, "", ""},
-		{"mem.used", emoji, "", "🧠 "},
+		{"cpu.total text", "cpu.total", text, "", "CPU "},
+		{"cpu.total emoji", "cpu.total", emoji, "", "⚙️ "},
+		{"cpu.total gnome", "cpu.total", gnome, "cpu", " "},
+		{"net.down text", "net.down", text, "", "↓"},
+		{"net.down emoji", "net.down", emoji, "", "📶 ↓"},
+		{"net.down gnome", "net.down", gnome, "network-download", " "}, // own icon → no ↓
+		{"swap.used text", "swap.used", text, "", "SW "},
+		{"swap.used emoji", "swap.used", emoji, "", "🧠 SW "},
+		{"swap.used gnome", "swap.used", gnome, "memory", " SW "}, // group icon → keep SW
+		{"mem.used text", "mem.used", text, "", ""},
+		{"mem.used emoji", "mem.used", emoji, "", "🧠 "},
 	}
-	for _, tc := range cases {
-		m, ok := tr.bar[tc.id]
-		if !ok {
-			t.Fatalf("%s missing from the bar map", tc.id)
-		}
-		icon, got := m.barPart(snap, tc.cfg)
-		if icon != tc.wantIcon {
-			t.Errorf("%s (%s/%s): icon = %q, want %q", tc.id, tc.cfg.BarLabels, tc.cfg.VisualStyle, icon, tc.wantIcon)
-		}
-		if want := tc.prefix + m.barValue(snap, tc.cfg); got != want {
-			t.Errorf("%s (%s/%s): text = %q, want %q", tc.id, tc.cfg.BarLabels, tc.cfg.VisualStyle, got, want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m, ok := tr.bar[tt.id]
+			if !ok {
+				t.Fatalf("%s missing from the bar map", tt.id)
+			}
+
+			icon, got := m.barPart(snap, tt.cfg)
+			if icon != tt.wantIcon {
+				t.Errorf("%s: icon = %q, want %q", tt.name, icon, tt.wantIcon)
+			}
+
+			if want := tt.prefix + m.barValue(snap, tt.cfg); got != want {
+				t.Errorf("%s: text = %q, want %q", tt.name, got, want)
+			}
+		})
 	}
 }
 
 // New must register every metric in the bar map, including ones that used
-// to be unpinnable (disk.free, temp.hottest, …).
+// to be unpinnable (disk.free, temp.hottest, …). A single-construction
+// invariant, so no table here.
 func TestNewRegistersAllMetricsAsPinnable(t *testing.T) {
+	t.Parallel()
+
 	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
 
 	total := 0
 	for _, g := range tr.groups {
 		total += len(g.metrics)
 	}
+
 	if len(tr.bar) != total {
 		t.Errorf("bar has %d metrics, groups have %d", len(tr.bar), total)
 	}
+
 	for _, id := range []entity.MetricID{"disk.free", "temp.hottest", "mem.available", "cpu.core.1", "temp.sensor.PMU tdie0"} {
 		if _, ok := tr.bar[id]; !ok {
 			t.Errorf("%s missing from the bar map", id)

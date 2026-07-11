@@ -1,9 +1,14 @@
 package format
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestPercent(t *testing.T) {
-	cases := []struct {
+	t.Parallel()
+
+	tests := []struct {
 		in   float64
 		want string
 	}{
@@ -15,16 +20,23 @@ func TestPercent(t *testing.T) {
 		{1.5, "100%"}, // clamped from above, like Vitals
 		{-0.1, "0%"},  // garbage below zero isn't shown
 	}
-	for _, c := range cases {
-		if got := Percent(c.in); got != c.want {
-			t.Errorf("Percent(%v) = %q, want %q", c.in, got, c.want)
-		}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.in), func(t *testing.T) {
+			t.Parallel()
+
+			if got := Percent(tt.in); got != tt.want {
+				t.Errorf("Percent(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestBytes(t *testing.T) {
+	t.Parallel()
+
 	const gib = 1024 * 1024 * 1024
-	cases := []struct {
+
+	tests := []struct {
 		in      uint64
 		decimal bool
 		want    string
@@ -38,15 +50,21 @@ func TestBytes(t *testing.T) {
 		{48 * gib, true, "51.5 GB"}, // decimal mode
 		{1000, true, "1.0 KB"},
 	}
-	for _, c := range cases {
-		if got := Bytes(c.in, c.decimal); got != c.want {
-			t.Errorf("Bytes(%d, %v) = %q, want %q", c.in, c.decimal, got, c.want)
-		}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d decimal=%t", tt.in, tt.decimal), func(t *testing.T) {
+			t.Parallel()
+
+			if got := Bytes(tt.in, tt.decimal); got != tt.want {
+				t.Errorf("Bytes(%d, %v) = %q, want %q", tt.in, tt.decimal, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestBytesShort(t *testing.T) {
-	cases := []struct {
+	t.Parallel()
+
+	tests := []struct {
 		in   uint64
 		want string
 	}{
@@ -54,15 +72,21 @@ func TestBytesShort(t *testing.T) {
 		{26092059034, "24.3G"}, // ≈24.3 GiB
 		{2 * 1024 * 1024, "2.0M"},
 	}
-	for _, c := range cases {
-		if got := BytesShort(c.in, false); got != c.want {
-			t.Errorf("BytesShort(%d) = %q, want %q", c.in, got, c.want)
-		}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.in), func(t *testing.T) {
+			t.Parallel()
+
+			if got := BytesShort(tt.in, false); got != tt.want {
+				t.Errorf("BytesShort(%d) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestSpeed(t *testing.T) {
-	cases := []struct {
+	t.Parallel()
+
+	tests := []struct {
 		in   float64
 		want string
 	}{
@@ -71,43 +95,122 @@ func TestSpeed(t *testing.T) {
 		{1200, "1.2 KB/s"},
 		{1340000, "1.3 MB/s"},
 	}
-	for _, c := range cases {
-		if got := Speed(c.in); got != c.want {
-			t.Errorf("Speed(%v) = %q, want %q", c.in, got, c.want)
-		}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.in), func(t *testing.T) {
+			t.Parallel()
+
+			if got := Speed(tt.in); got != tt.want {
+				t.Errorf("Speed(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
-	if got := SpeedShort(1340000); got != "1.3M/s" {
-		t.Errorf("SpeedShort = %q, want 1.3M/s", got)
+}
+
+func TestSpeedShort(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in   float64
+		want string
+	}{
+		{0, "0B/s"},
+		{1340000, "1.3M/s"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.in), func(t *testing.T) {
+			t.Parallel()
+
+			if got := SpeedShort(tt.in); got != tt.want {
+				t.Errorf("SpeedShort(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestTemp(t *testing.T) {
-	if got := Temp(54.4, false); got != "54°C" {
-		t.Errorf("Temp C = %q", got)
+	t.Parallel()
+
+	tests := []struct {
+		in         float64
+		fahrenheit bool
+		want       string
+	}{
+		{54.4, false, "54°C"},
+		{100, true, "212°F"},
 	}
-	if got := Temp(100, true); got != "212°F" {
-		t.Errorf("Temp F = %q", got)
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+
+			if got := Temp(tt.in, tt.fahrenheit); got != tt.want {
+				t.Errorf("Temp(%v, %v) = %q, want %q", tt.in, tt.fahrenheit, got, tt.want)
+			}
+		})
 	}
-	if got := TempShort(54.4, false); got != "54°" {
-		t.Errorf("TempShort = %q", got)
+}
+
+func TestTempShort(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in         float64
+		fahrenheit bool
+		want       string
+	}{
+		{54.4, false, "54°"},
+		{100, true, "212°"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%v fahrenheit=%t", tt.in, tt.fahrenheit), func(t *testing.T) {
+			t.Parallel()
+
+			if got := TempShort(tt.in, tt.fahrenheit); got != tt.want {
+				t.Errorf("TempShort(%v, %v) = %q, want %q", tt.in, tt.fahrenheit, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestHertz(t *testing.T) {
-	if got := Hertz(3500000000); got != "3.5 GHz" {
-		t.Errorf("Hertz = %q", got)
+	t.Parallel()
+
+	tests := []struct {
+		in   float64
+		want string
+	}{
+		{3500000000, "3.5 GHz"},
+		{0, "0 Hz"},
 	}
-	if got := Hertz(0); got != "0 Hz" {
-		t.Errorf("Hertz(0) = %q", got)
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.in), func(t *testing.T) {
+			t.Parallel()
+
+			if got := Hertz(tt.in); got != tt.want {
+				t.Errorf("Hertz(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestSparkline(t *testing.T) {
-	if got := Sparkline(nil); got != "" {
-		t.Errorf("Sparkline(nil) = %q, want empty", got)
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   []float64
+		want string
+	}{
+		{name: "empty history", in: nil, want: ""},
+		// 0 → bottom block, 1 → top block, outliers are clamped
+		{name: "clamped values", in: []float64{0, 0.5, 1, 2, -1}, want: "▁▅██▁"},
 	}
-	// 0 → bottom block, 1 → top block, outliers are clamped
-	if got := Sparkline([]float64{0, 0.5, 1, 2, -1}); got != "▁▅██▁" {
-		t.Errorf("Sparkline = %q, want ▁▅██▁", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := Sparkline(tt.in); got != tt.want {
+				t.Errorf("Sparkline(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }

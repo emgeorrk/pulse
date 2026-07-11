@@ -6,40 +6,68 @@ import (
 )
 
 func TestDecodeSMC(t *testing.T) {
-	cases := []struct {
-		typ  string
-		b    []byte
-		want float64
-	}{
-		// Apple Silicon: little-endian float32 (1850.0 RPM)
-		{"flt ", []byte{0x00, 0x40, 0xe7, 0x44}, 1850},
-		// Intel fan: big-endian fpe2 — 0x1CE8 >> 2 = 1850
-		{"fpe2", []byte{0x1c, 0xe8}, 1850},
-		// Intel temp: sp78 — 0x3A80 / 256 = 58.5°C
-		{"sp78", []byte{0x3a, 0x80}, 58.5},
-		// negative temperature in sp78
-		{"sp78", []byte{0xff, 0x00}, -1},
-		{"ui8 ", []byte{2}, 2},
-		{"ui16", []byte{0x01, 0x00}, 256},
-		{"ui32", []byte{0, 0, 0x01, 0x00}, 256},
-	}
-	for _, c := range cases {
-		got, err := decodeSMC(c.typ, c.b)
-		if err != nil {
-			t.Errorf("decodeSMC(%q) error: %v", c.typ, err)
-			continue
-		}
-		if math.Abs(got-c.want) > 1e-6 {
-			t.Errorf("decodeSMC(%q) = %v, want %v", c.typ, got, c.want)
-		}
-	}
-}
+	t.Parallel()
 
-func TestDecodeSMCErrors(t *testing.T) {
-	if _, err := decodeSMC("flt ", []byte{1, 2}); err == nil {
-		t.Error("short flt should error")
+	tests := []struct {
+		name    string
+		typ     string
+		b       []byte
+		want    float64
+		wantErr bool
+	}{
+		{
+			// Apple Silicon: little-endian float32 (1850.0 RPM)
+			name: "flt little-endian float32",
+			typ:  "flt ",
+			b:    []byte{0x00, 0x40, 0xe7, 0x44},
+			want: 1850,
+		},
+		{
+			// Intel fan: big-endian fpe2 — 0x1CE8 >> 2 = 1850
+			name: "fpe2 big-endian fixed-point",
+			typ:  "fpe2",
+			b:    []byte{0x1c, 0xe8},
+			want: 1850,
+		},
+		{
+			// Intel temp: sp78 — 0x3A80 / 256 = 58.5°C
+			name: "sp78 temperature",
+			typ:  "sp78",
+			b:    []byte{0x3a, 0x80},
+			want: 58.5,
+		},
+		{
+			name: "sp78 negative temperature",
+			typ:  "sp78",
+			b:    []byte{0xff, 0x00},
+			want: -1,
+		},
+		{name: "ui8", typ: "ui8 ", b: []byte{2}, want: 2},
+		{name: "ui16", typ: "ui16", b: []byte{0x01, 0x00}, want: 256},
+		{name: "ui32", typ: "ui32", b: []byte{0, 0, 0x01, 0x00}, want: 256},
+		{name: "short flt errors", typ: "flt ", b: []byte{1, 2}, wantErr: true},
+		{name: "unknown type errors", typ: "hex_", b: []byte{1, 2, 3, 4}, wantErr: true},
 	}
-	if _, err := decodeSMC("hex_", []byte{1, 2, 3, 4}); err == nil {
-		t.Error("unknown type should error")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := decodeSMC(tt.typ, tt.b)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("decodeSMC(%q, % x) = %v, want error", tt.typ, tt.b, got)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("decodeSMC(%q) error: %v", tt.typ, err)
+			}
+
+			if math.Abs(got-tt.want) > 1e-6 {
+				t.Errorf("decodeSMC(%q) = %v, want %v", tt.typ, got, tt.want)
+			}
+		})
 	}
 }

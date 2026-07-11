@@ -5,6 +5,8 @@
 // IOHIDEventSystemClient/IOReport on Apple Silicon.
 package sensors
 
+//go:generate go tool mockgen -source=contracts.go -destination=mocks/sensors.go -package=mocks
+
 import "github.com/emgeorrk/pulse/internal/entity"
 
 // CPUSource returns cumulative per-core load ticks; usecase computes load
