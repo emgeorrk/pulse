@@ -1,6 +1,7 @@
 package sensors
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -9,11 +10,12 @@ func TestDecodeSMC(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		typ     string
-		b       []byte
-		want    float64
-		wantErr bool
+		name        string
+		typ         string
+		b           []byte
+		want        float64
+		wantErr     bool
+		wantErrType error // if set, err must match this sentinel
 	}{
 		{
 			// Apple Silicon: little-endian float32 (1850.0 RPM)
@@ -45,8 +47,13 @@ func TestDecodeSMC(t *testing.T) {
 		{name: "ui8", typ: "ui8 ", b: []byte{2}, want: 2},
 		{name: "ui16", typ: "ui16", b: []byte{0x01, 0x00}, want: 256},
 		{name: "ui32", typ: "ui32", b: []byte{0, 0, 0x01, 0x00}, want: 256},
-		{name: "short flt errors", typ: "flt ", b: []byte{1, 2}, wantErr: true},
-		{name: "unknown type errors", typ: "hex_", b: []byte{1, 2, 3, 4}, wantErr: true},
+		{name: "short flt errors", typ: "flt ", b: []byte{1, 2}, wantErr: true, wantErrType: errSMCDataShort},
+		{name: "short fpe2 errors", typ: "fpe2", b: []byte{1}, wantErr: true, wantErrType: errSMCDataShort},
+		{name: "short sp78 errors", typ: "sp78", b: []byte{1}, wantErr: true, wantErrType: errSMCDataShort},
+		{name: "short ui8 errors", typ: "ui8 ", b: []byte{}, wantErr: true, wantErrType: errSMCDataShort},
+		{name: "short ui16 errors", typ: "ui16", b: []byte{1}, wantErr: true, wantErrType: errSMCDataShort},
+		{name: "short ui32 errors", typ: "ui32", b: []byte{1, 2, 3}, wantErr: true, wantErrType: errSMCDataShort},
+		{name: "unknown type errors", typ: "hex_", b: []byte{1, 2, 3, 4}, wantErr: true, wantErrType: errSMCDataType},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,6 +63,10 @@ func TestDecodeSMC(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("decodeSMC(%q, % x) = %v, want error", tt.typ, tt.b, got)
+				}
+
+				if tt.wantErrType != nil && !errors.Is(err, tt.wantErrType) {
+					t.Errorf("decodeSMC(%q) error = %v, want %v", tt.typ, err, tt.wantErrType)
 				}
 
 				return

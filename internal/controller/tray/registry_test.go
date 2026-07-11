@@ -40,6 +40,8 @@ func TestEveryMetricRendersInBar(t *testing.T) {
 	}{
 		{name: "empty frame", snap: entity.Snapshot{}},
 		{name: "sample frame", snap: sampleSnapshot()},
+		{name: "fallback frame", snap: fallbackSnapshot()},
+		{name: "charging frame", snap: chargingSnapshot()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -57,6 +59,39 @@ func TestEveryMetricRendersInBar(t *testing.T) {
 					if got := m.menu(tt.snap, cfg); got == "" {
 						t.Errorf("%s: empty menu", m.id)
 					}
+				}
+			}
+		})
+	}
+}
+
+// The header aggregates were never exercised (TestEveryMetricRendersInBar
+// only drives the submenu metrics), so cover every group's aggregate across
+// absent, present, and charging frames.
+func TestGroupAggregates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		snap entity.Snapshot
+	}{
+		{name: "empty frame", snap: entity.Snapshot{}},
+		{name: "sample frame", snap: sampleSnapshot()},
+		{name: "fallback frame", snap: fallbackSnapshot()},
+		{name: "charging frame", snap: chargingSnapshot()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := config.Config{}
+			for _, g := range buildGroups(entity.HWInfo{NumCores: 2}, fullCaps()) {
+				if g.aggregate == nil {
+					continue
+				}
+
+				if got := g.aggregate(tt.snap, cfg); got == "" {
+					t.Errorf("%s: empty aggregate", g.label)
 				}
 			}
 		})
@@ -167,4 +202,36 @@ func sampleSnapshot() entity.Snapshot {
 			Max:      3.5e9,
 		},
 	}
+}
+
+// fallbackSnapshot drives the non-nil-but-alternate branches: temps with no
+// CPU/GPU aggregate (hottest fallback), a fan with no rated max, and a
+// battery on AC with unknown health/time.
+func fallbackSnapshot() entity.Snapshot {
+	return entity.Snapshot{
+		CPU:  entity.CPUStats{Total: 0.1, Cores: []float64{0.1, 0.1}},
+		Mem:  entity.MemStats{Total: 16 << 30, Used: 4 << 30, Available: 12 << 30},
+		Net:  &entity.NetStats{},
+		Disk: &entity.DiskStats{DiskUsage: entity.DiskUsage{Total: 100 << 30, Used: 50 << 30, Available: 50 << 30}},
+		Temps: &entity.TempStats{
+			CPU: 0, GPU: 0, // no aggregate → aggregate falls back to hottest
+			Hottest: entity.Reading{Name: "PMU tdie0", Value: 60},
+			All:     []entity.Reading{{Name: "PMU tdie0", Value: 60}},
+		},
+		Volts:   []entity.Reading{{Name: "PMU vbus", Value: 12}},
+		Fans:    []entity.Fan{{Name: "Fan 1", RPM: 1200, Max: 0}}, // Max 0 → no load percentage
+		Battery: &entity.BatteryStats{Percent: 0.5, Health: 0, Cycles: 0, External: true, Charging: false, MinutesLeft: -1},
+		GPU:     &entity.GPUStats{Utilization: 0.1},
+		Power:   &entity.PowerStats{},
+		Freq:    &entity.FreqStats{Clusters: []entity.Reading{{Name: "E-cores", Value: 1e9}}, Max: 1e9},
+	}
+}
+
+// chargingSnapshot is the sample frame with the battery charging, to reach
+// the "⚡"/"Charging" branches.
+func chargingSnapshot() entity.Snapshot {
+	s := sampleSnapshot()
+	s.Battery.Charging = true
+
+	return s
 }

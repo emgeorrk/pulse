@@ -3,8 +3,67 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
+
+func TestInterval(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sec  int
+		want time.Duration
+	}{
+		{name: "positive interval", sec: 5, want: 5 * time.Second},
+		{name: "one second", sec: 1, want: time.Second},
+		{name: "zero falls back to default", sec: 0, want: defaultIntervalSeconds * time.Second},
+		{name: "negative falls back to default", sec: -3, want: defaultIntervalSeconds * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := (Config{IntervalSec: tt.sec}).Interval(); got != tt.want {
+				t.Errorf("Interval() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// DefaultPath depends only on the OS home dir, so a single invariant check.
+func TestDefaultPath(t *testing.T) {
+	t.Parallel()
+
+	path, err := DefaultPath()
+	if err != nil {
+		t.Fatalf("DefaultPath: %v", err)
+	}
+
+	if want := filepath.Join("pulse", "config.json"); !strings.HasSuffix(path, want) {
+		t.Errorf("DefaultPath() = %q, want suffix %q", path, want)
+	}
+}
+
+// A store with an empty path keeps changes in memory but must not error on
+// save (the persistence-optional branch).
+func TestUpdateWithoutPath(t *testing.T) {
+	t.Parallel()
+
+	s := Load("")
+	if err := s.Update(func(c *Config) { c.IntervalSec = 3 }); err != nil {
+		t.Errorf("Update on empty-path store: %v", err)
+	}
+
+	if got := s.Get().IntervalSec; got != 3 {
+		t.Errorf("IntervalSec = %d, want 3 (change kept in memory)", got)
+	}
+
+	if pinned := s.TogglePin("test.metric"); pinned != s.Get().IsPinned("test.metric") {
+		t.Errorf("TogglePin returned %v but IsPinned = %v", pinned, s.Get().IsPinned("test.metric"))
+	}
+}
 
 func TestLoad(t *testing.T) {
 	t.Parallel()

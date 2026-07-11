@@ -173,6 +173,11 @@ const (
 	frequencyEntryBytes   = 8
 	minimumFrequencyHz    = 1e8
 	frequencyUnitScale    = 1000
+
+	unitNanojoules  = "nJ"
+	unitMicrojoules = "uJ"
+	unitMicroSign   = "µJ"
+	unitMillijoules = "mJ"
 )
 
 // IOReport returns CPU/GPU/ANE power (Energy Model group) and CPU frequency
@@ -292,11 +297,11 @@ func (r *IOReport) Power() (entity.PowerStats, error) { //nolint:cyclop,gocyclo 
 // joulesDivisor converts a channel's unit into a divisor down to joules.
 func joulesDivisor(unit string) float64 {
 	switch strings.TrimSpace(unit) {
-	case "nJ":
+	case unitNanojoules:
 		return nanojoulesPerJoule
-	case "uJ", "µJ":
+	case unitMicrojoules, unitMicroSign:
 		return microjoulesPerJoule
-	case "mJ":
+	case unitMillijoules:
 		return millijoulesPerJoule
 	default:
 		return 1 // J
