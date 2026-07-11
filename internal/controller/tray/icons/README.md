@@ -21,5 +21,5 @@ originates from:
 rendered by `scripts/sfsymbol2png.swift` (the Vitals set has no gear). SF
 Symbols may be used in apps for Apple platforms per Apple's license terms.
 
-Redistributing pulse with these icons embedded carries the corresponding
+Redistributing Pulse with these icons embedded carries the corresponding
 GPL/attribution obligations. Keep this notice when distributing.

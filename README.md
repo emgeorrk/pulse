@@ -1,4 +1,4 @@
-# pulse
+# Pulse
 
 A native menu bar monitor for macOS — a feature (not code) equivalent of the
 GNOME extension [Vitals](https://github.com/corecoding/Vitals). Go + CGO, no
@@ -43,7 +43,7 @@ make test   # unit tests
 useful when porting to a new chip generation.
 
 `Pulse.app` is a background agent (`LSUIElement=true`): no Dock icon, just a
-menu bar item. Quit via "Quit pulse" in the dropdown.
+menu bar item. Quit via "Quit Pulse" in the dropdown.
 
 ## Structure
 

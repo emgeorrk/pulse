@@ -74,7 +74,7 @@ func (t *Tray) Run(start func(ctx context.Context) <-chan entity.Snapshot) {
 
 func (t *Tray) build() {
 	systray.SetTitle(restFrame)
-	systray.SetTooltip("pulse — system monitor")
+	systray.SetTooltip("Pulse — system monitor")
 
 	for _, key := range icons.Keys() {
 		systray.RegisterTitleIcon(key, icons.PNG(key))
@@ -119,7 +119,7 @@ func (t *Tray) build() {
 
 	systray.AddSeparator()
 
-	quit := systray.AddMenuItem("Quit pulse", "")
+	quit := systray.AddMenuItem("Quit Pulse", "")
 	go func() {
 		<-quit.ClickedCh
 		systray.Quit()
@@ -456,7 +456,7 @@ func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) { //nolint:cyclop,
 	}
 
 	if len(parts) == 0 {
-		systray.SetTitle("pulse")
+		systray.SetTitle("Pulse")
 
 		return
 	}
