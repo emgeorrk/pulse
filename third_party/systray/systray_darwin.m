@@ -312,8 +312,26 @@ static const CGFloat kPulseTrailingPad = 14;
   [self updateTitleButtonStyle];
 }
 
+// PATCH(pulse): title text attributes with an explicit foreground color.
+// Runs without one get the button's default color, and NSStatusBarButton
+// swaps that for a dimmed variant while its display's menu bar is inactive
+// (second monitor focused) — neighboring items don't dim, so ours shouldn't.
+// labelColor is a dynamic color: it still resolves against the button's
+// appearance at draw time, keeping the light/dark adaptation.
+static NSDictionary *pulseTitleTextAttrs(NSFont *font) {
+  if (font == nil) {
+    font = [NSFont menuBarFontOfSize:0];
+  }
+  return @{NSFontAttributeName : font,
+           NSForegroundColorAttributeName : NSColor.labelColor};
+}
+
 - (void)setTitle:(NSString *)title {
-  statusItem.button.title = title;
+  // PATCH(pulse): attributed rather than plain so the explicit text color
+  // applies to the plain-text modes too (see pulseTitleTextAttrs).
+  statusItem.button.attributedTitle = [[NSAttributedString alloc]
+      initWithString:title
+          attributes:pulseTitleTextAttrs(statusItem.button.font)];
   [self updateTitleButtonStyle];
 }
 
@@ -366,7 +384,7 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
   }
   CGFloat side = ceil(font.capHeight * kPulseTitleIconScale);
   CGFloat drop = floor((side - font.capHeight) / 2.0);
-  NSDictionary *textAttrs = @{NSFontAttributeName : font};
+  NSDictionary *textAttrs = pulseTitleTextAttrs(font);
   NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
   for (NSString *part in [encoded componentsSeparatedByString:@"\x1e"]) {
     NSArray<NSString*> *fields = [part componentsSeparatedByString:@"\x1f"];
