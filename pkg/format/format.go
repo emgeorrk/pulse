@@ -23,9 +23,11 @@ func Percent(v float64) string {
 	if p > 100 {
 		p = 100
 	}
+
 	if p < 0 {
 		p = 0
 	}
+
 	return fmt.Sprintf("%d%%", int(p))
 }
 
@@ -35,6 +37,7 @@ func Bytes(v uint64, decimal bool) string {
 	if unit == "B" {
 		return fmt.Sprintf("%d B", v)
 	}
+
 	return fmt.Sprintf("%.1f %s", val, unit)
 }
 
@@ -44,6 +47,7 @@ func BytesShort(v uint64, decimal bool) string {
 	if unit == "B" {
 		return fmt.Sprintf("%dB", v)
 	}
+
 	return fmt.Sprintf("%.1f%s", val, unit[:1])
 }
 
@@ -52,10 +56,12 @@ func Speed(bytesPerSec float64) string {
 	if bytesPerSec < 0 {
 		bytesPerSec = 0
 	}
+
 	val, unit := scale(bytesPerSec, 1000, decimalUnits)
 	if unit == "B" {
 		return fmt.Sprintf("%.0f B/s", val)
 	}
+
 	return fmt.Sprintf("%.1f %s/s", val, unit)
 }
 
@@ -64,21 +70,25 @@ func SpeedShort(bytesPerSec float64) string {
 	if bytesPerSec < 0 {
 		bytesPerSec = 0
 	}
+
 	val, unit := scale(bytesPerSec, 1000, decimalUnits)
 	if unit == "B" {
 		return fmt.Sprintf("%.0fB/s", val)
 	}
+
 	return fmt.Sprintf("%.1f%s/s", val, unit[:1])
 }
 
 // Temp converts Celsius degrees to "54°C" or "129°F".
 func Temp(celsius float64, fahrenheit bool) string {
 	unit := "C"
+
 	v := celsius
 	if fahrenheit {
 		v = celsius*9/5 + 32
 		unit = "F"
 	}
+
 	return fmt.Sprintf("%d°%s", int(math.Round(v)), unit)
 }
 
@@ -88,6 +98,7 @@ func TempShort(celsius float64, fahrenheit bool) string {
 	if fahrenheit {
 		v = celsius*9/5 + 32
 	}
+
 	return fmt.Sprintf("%d°", int(math.Round(v)))
 }
 
@@ -111,7 +122,9 @@ func Hertz(hz float64) string {
 	if hz <= 0 {
 		return "0 Hz"
 	}
+
 	val, unit := scale(hz, 1000, hertzUnits)
+
 	return fmt.Sprintf("%.1f %s", val, unit)
 }
 
@@ -119,19 +132,24 @@ func Hertz(hz float64) string {
 // An empty history yields an empty string.
 func Sparkline(vals []float64) string {
 	var b strings.Builder
+
 	for _, v := range vals {
 		if v < 0 {
 			v = 0
 		}
+
 		if v > 1 {
 			v = 1
 		}
+
 		idx := int(v * float64(len(sparkRunes)))
 		if idx >= len(sparkRunes) {
 			idx = len(sparkRunes) - 1
 		}
+
 		b.WriteRune(sparkRunes[idx])
 	}
+
 	return b.String()
 }
 
@@ -139,6 +157,7 @@ func scaleBytes(v uint64, decimal bool) (float64, string) {
 	if decimal {
 		return scale(float64(v), 1000, decimalUnits)
 	}
+
 	return scale(float64(v), 1024, binaryUnits)
 }
 
@@ -153,5 +172,6 @@ func scale(v, unit float64, units []string) (float64, string) {
 		v /= unit
 		exp++
 	}
+
 	return v, units[exp]
 }

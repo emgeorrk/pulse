@@ -20,29 +20,38 @@ var (
 func AggregateTemps(all []entity.Reading) entity.TempStats {
 	stats := entity.TempStats{All: all}
 
-	var cpuSum, gpuSum float64
-	var cpuN, gpuN int
+	var (
+		cpuSum, gpuSum float64
+		cpuN, gpuN     int
+	)
+
 	for _, r := range all {
 		name := strings.ToLower(r.Name)
 		if r.Value > stats.Hottest.Value {
 			stats.Hottest = r
 		}
+
 		if matchAny(name, gpuTempMarkers) {
 			gpuSum += r.Value
 			gpuN++
+
 			continue // "GPU" must not land in the CPU aggregate via the "soc" marker
 		}
+
 		if matchAny(name, cpuTempMarkers) {
 			cpuSum += r.Value
 			cpuN++
 		}
 	}
+
 	if cpuN > 0 {
 		stats.CPU = cpuSum / float64(cpuN)
 	}
+
 	if gpuN > 0 {
 		stats.GPU = gpuSum / float64(gpuN)
 	}
+
 	return stats
 }
 
@@ -52,5 +61,6 @@ func matchAny(s string, markers []string) bool {
 			return true
 		}
 	}
+
 	return false
 }

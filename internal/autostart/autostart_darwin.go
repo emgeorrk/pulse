@@ -18,6 +18,7 @@ func plistPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return filepath.Join(home, "Library", "LaunchAgents", label+".plist"), nil
 }
 
@@ -48,13 +49,16 @@ func Enable() error {
 	if err != nil {
 		return err
 	}
+
 	path, err := plistPath()
 	if err != nil {
 		return err
 	}
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+
 	return os.WriteFile(path, []byte(Plist(exe)), 0o644)
 }
 
@@ -64,8 +68,10 @@ func Disable() error {
 	if err != nil {
 		return err
 	}
+
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+
 	return nil
 }

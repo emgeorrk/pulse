@@ -41,5 +41,6 @@ func PNG(key string) []byte {
 	if err != nil {
 		return nil
 	}
+
 	return b
 }

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"fyne.io/systray"
-
 	"github.com/emgeorrk/pulse/config"
 	"github.com/emgeorrk/pulse/internal/autostart"
 	"github.com/emgeorrk/pulse/internal/controller/tray/icons"
@@ -29,20 +28,17 @@ type groupUI struct {
 }
 
 type Tray struct {
-	store *config.Store
-	hw    entity.HWInfo
-
-	groups   []groupUI
-	bar      map[entity.MetricID]metric // metrics by id, for rendering in the menu bar
-	sys      *systray.MenuItem          // the System info item, restyled together with the groups
-	settings *systray.MenuItem          // likewise the Settings item
-
-	mu      sync.Mutex
-	last    entity.Snapshot
-	seen    bool // whether at least one frame has been received
-	loading bool // startup heartbeat animation owns the title
-
-	appliedStyle config.VisualStyle // visual style the dropdown icons currently reflect
+	last         entity.Snapshot
+	store        *config.Store
+	bar          map[entity.MetricID]metric
+	sys          *systray.MenuItem
+	settings     *systray.MenuItem
+	appliedStyle config.VisualStyle
+	groups       []groupUI
+	hw           entity.HWInfo
+	mu           sync.Mutex
+	seen         bool
+	loading      bool
 }
 
 func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
@@ -51,11 +47,13 @@ func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
 		for i, m := range g.metrics {
 			g.metrics[i] = m.fill(g)
 		}
+
 		t.groups = append(t.groups, groupUI{group: g})
 		for _, m := range g.metrics {
 			t.bar[m.id] = m
 		}
 	}
+
 	return t
 }
 
@@ -82,24 +80,30 @@ func (t *Tray) build() {
 
 	for gi := range t.groups {
 		g := &t.groups[gi]
+
 		g.item = systray.AddMenuItem(g.headerTitle(cfg, ""), "")
 		for _, m := range g.metrics {
 			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
+
 			it.KeepMenuOpen() // pinning several metrics in one menu open
 			go t.watchPin(m.id, it)
+
 			g.rows = append(g.rows, it)
 		}
 	}
 
 	systray.AddSeparator()
+
 	t.sys = systray.AddMenuItem(sysTitle(cfg), "")
 	t.sys.AddSubMenuItem(t.hw.Chip, "")
+
 	switch {
 	case t.hw.ModelName != "":
 		t.sys.AddSubMenuItem(prettyModel(t.hw.ModelName, t.hw.Chip), "")
 	case t.hw.Model != "":
 		t.sys.AddSubMenuItem("Model: "+t.hw.Model, "")
 	}
+
 	if t.hw.OSVersion != "" {
 		t.sys.AddSubMenuItem("macOS "+t.hw.OSVersion, "")
 	}
@@ -109,6 +113,7 @@ func (t *Tray) build() {
 	t.applyVisualStyle(cfg) // after buildSettings so the Settings item exists
 
 	systray.AddSeparator()
+
 	quit := systray.AddMenuItem("Quit pulse", "")
 	go func() {
 		<-quit.ClickedCh
@@ -123,9 +128,11 @@ func (g *groupUI) headerTitle(cfg config.Config, aggregate string) string {
 	if cfg.VisualStyle != config.VisualGnome {
 		title = g.emoji + " " + title
 	}
+
 	if aggregate != "" {
 		title += " · " + aggregate
 	}
+
 	return title
 }
 
@@ -133,6 +140,7 @@ func sysTitle(cfg config.Config) string {
 	if cfg.VisualStyle == config.VisualGnome {
 		return "System"
 	}
+
 	return "ℹ️ System"
 }
 
@@ -140,6 +148,7 @@ func settingsTitle(cfg config.Config) string {
 	if cfg.VisualStyle == config.VisualGnome {
 		return "Settings"
 	}
+
 	return "🛠️ Settings"
 }
 
@@ -148,6 +157,7 @@ func settingsTitle(cfg config.Config) string {
 // aren't re-decoded each tick.
 func (t *Tray) applyVisualStyle(cfg config.Config) {
 	gnome := cfg.VisualStyle == config.VisualGnome
+
 	for gi := range t.groups {
 		g := &t.groups[gi]
 		if gnome {
@@ -156,22 +166,27 @@ func (t *Tray) applyVisualStyle(cfg config.Config) {
 			g.item.ClearIcon()
 		}
 	}
+
 	if t.sys != nil {
 		t.sys.SetTitle(sysTitle(cfg))
+
 		if gnome {
 			setTemplateIcon(t.sys, icons.System)
 		} else {
 			t.sys.ClearIcon()
 		}
 	}
+
 	if t.settings != nil {
 		t.settings.SetTitle(settingsTitle(cfg))
+
 		if gnome {
 			setTemplateIcon(t.settings, icons.Settings)
 		} else {
 			t.settings.ClearIcon()
 		}
 	}
+
 	t.mu.Lock()
 	t.appliedStyle = cfg.VisualStyle
 	t.mu.Unlock()
@@ -191,19 +206,24 @@ func (t *Tray) buildSettings(cfg config.Config) {
 
 	// update interval — radio group
 	intervals := []int{1, 2, 3, 5}
+
 	var intervalItems []*systray.MenuItem
+
 	for _, sec := range intervals {
-		sec := sec
+
 		label := formatSeconds(sec)
 		it := s.AddSubMenuItemCheckbox("Update: "+label, "", cfg.IntervalSec == sec)
 		it.KeepMenuOpen()
+
 		intervalItems = append(intervalItems, it)
 		go func(me *systray.MenuItem) {
 			for range me.ClickedCh {
 				t.store.Update(func(c *config.Config) { c.IntervalSec = sec })
+
 				for _, other := range intervalItems {
 					other.Uncheck()
 				}
+
 				me.Check()
 			}
 		}(it)
@@ -212,7 +232,9 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	// temperature unit — radio group (relevant since the temps feature)
 	tempC := s.AddSubMenuItemCheckbox("Temperature: °C", "", cfg.TempUnit == config.Celsius)
 	tempF := s.AddSubMenuItemCheckbox("Temperature: °F", "", cfg.TempUnit == config.Fahrenheit)
+
 	tempC.KeepMenuOpen()
+
 	tempF.KeepMenuOpen()
 	go t.watchRadio(tempC, tempF, func(c *config.Config) { c.TempUnit = config.Celsius })
 	go t.watchRadio(tempF, tempC, func(c *config.Config) { c.TempUnit = config.Fahrenheit })
@@ -220,7 +242,9 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	// memory unit — radio group
 	binU := s.AddSubMenuItemCheckbox("Memory: GiB", "", !cfg.DecimalBytes)
 	decU := s.AddSubMenuItemCheckbox("Memory: GB", "", cfg.DecimalBytes)
+
 	binU.KeepMenuOpen()
+
 	decU.KeepMenuOpen()
 	go t.watchRadio(binU, decU, func(c *config.Config) { c.DecimalBytes = false })
 	go t.watchRadio(decU, binU, func(c *config.Config) { c.DecimalBytes = true })
@@ -229,7 +253,9 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	// the dropdown via applyVisualStyle
 	visEmoji := s.AddSubMenuItemCheckbox("Icons: Emoji", "", cfg.VisualStyle == config.VisualEmoji)
 	visGnome := s.AddSubMenuItemCheckbox("Icons: GNOME", "", cfg.VisualStyle == config.VisualGnome)
+
 	visEmoji.KeepMenuOpen()
+
 	visGnome.KeepMenuOpen()
 	go t.watchRadio(visEmoji, visGnome, func(c *config.Config) { c.VisualStyle = config.VisualEmoji })
 	go t.watchRadio(visGnome, visEmoji, func(c *config.Config) { c.VisualStyle = config.VisualGnome })
@@ -237,17 +263,21 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	// bar label style — radio group
 	barText := s.AddSubMenuItemCheckbox("Bar labels: Text", "", cfg.BarLabels == config.BarText)
 	barVis := s.AddSubMenuItemCheckbox("Bar labels: Icons", "", cfg.BarLabels == config.BarVisual)
+
 	barText.KeepMenuOpen()
+
 	barVis.KeepMenuOpen()
 	go t.watchRadio(barText, barVis, func(c *config.Config) { c.BarLabels = config.BarText })
 	go t.watchRadio(barVis, barText, func(c *config.Config) { c.BarLabels = config.BarVisual })
 
 	// CPU sparkline in the menu bar
 	spark := s.AddSubMenuItemCheckbox("CPU sparkline in bar", "", cfg.ShowSparkline)
+
 	spark.KeepMenuOpen()
 	go func() {
 		for range spark.ClickedCh {
 			var on bool
+
 			t.store.Update(func(c *config.Config) { c.ShowSparkline = !c.ShowSparkline; on = c.ShowSparkline })
 			setChecked(spark, on)
 			t.refresh()
@@ -256,21 +286,27 @@ func (t *Tray) buildSettings(cfg config.Config) {
 
 	// start at login
 	login := s.AddSubMenuItemCheckbox("Start at login", "", cfg.StartAtLogin)
+
 	login.KeepMenuOpen()
 	go func() {
 		for range login.ClickedCh {
 			var on bool
+
 			t.store.Update(func(c *config.Config) { c.StartAtLogin = !c.StartAtLogin; on = c.StartAtLogin })
+
 			var err error
 			if on {
 				err = autostart.Enable()
 			} else {
 				err = autostart.Disable()
 			}
+
 			if err != nil { // rollback: couldn't write the LaunchAgent — don't lie with the checkbox
 				t.store.Update(func(c *config.Config) { c.StartAtLogin = !on })
+
 				on = !on
 			}
+
 			setChecked(login, on)
 		}
 	}()
@@ -315,18 +351,22 @@ func (t *Tray) animate(ctx context.Context) {
 	for {
 		for _, f := range heartbeat {
 			systray.SetTitle(f.frame)
+
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(f.d):
 			}
 		}
+
 		t.mu.Lock()
 		done := t.seen
 		t.loading = !done
 		t.mu.Unlock()
+
 		if done {
 			t.refresh()
+
 			return
 		}
 	}
@@ -348,6 +388,7 @@ func (t *Tray) refresh() {
 	t.mu.Lock()
 	snap, ok := t.last, t.seen
 	t.mu.Unlock()
+
 	if ok {
 		t.render(snap)
 	}
@@ -359,9 +400,11 @@ func (t *Tray) render(s entity.Snapshot) {
 	loading := t.loading
 	styleStale := t.appliedStyle != cfg.VisualStyle
 	t.mu.Unlock()
+
 	if styleStale { // the style radio changed — restyle the dropdown once
 		t.applyVisualStyle(cfg)
 	}
+
 	if !loading { // while loading, the heartbeat animation owns the title
 		t.setTitle(s, cfg)
 	}
@@ -371,6 +414,7 @@ func (t *Tray) render(s entity.Snapshot) {
 		if g.aggregate != nil {
 			g.item.SetTitle(g.headerTitle(cfg, g.aggregate(s, cfg)))
 		}
+
 		for i, m := range g.metrics {
 			g.rows[i].SetTitle(m.label + ": " + m.menu(s, cfg))
 		}
@@ -385,14 +429,17 @@ func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) {
 	if cfg.ShowSparkline && len(s.CPU.History) > 0 {
 		parts = append(parts, systray.TitlePart{Text: format.Sparkline(s.CPU.History)})
 	}
+
 	for _, id := range cfg.Pinned {
 		if m, ok := t.bar[id]; ok {
 			iconKey, text := m.barPart(s, cfg)
 			parts = append(parts, systray.TitlePart{Icon: iconKey, Text: text})
 		}
 	}
+
 	if len(parts) == 0 {
 		systray.SetTitle("pulse")
+
 		return
 	}
 
@@ -404,9 +451,12 @@ func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) {
 			if i > 0 {
 				sep = append(sep, systray.TitlePart{Text: " "})
 			}
+
 			sep = append(sep, p)
 		}
+
 		systray.SetTitleParts(sep)
+
 		return
 	}
 
@@ -414,6 +464,7 @@ func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) {
 	for i, p := range parts {
 		texts[i] = p.Text
 	}
+
 	systray.SetTitle(strings.Join(texts, "  "))
 }
 
@@ -437,14 +488,18 @@ func prettyModel(name, chip string) string {
 	if !ok {
 		return name
 	}
+
 	parts := []string{strings.TrimSpace(base)}
+
 	rest = strings.TrimSuffix(strings.TrimSpace(rest), ")")
 	for _, tok := range strings.Split(rest, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" || strings.Contains(chip, tok) {
 			continue
 		}
+
 		parts = append(parts, tok)
 	}
+
 	return strings.Join(parts, " ")
 }

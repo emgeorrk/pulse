@@ -38,9 +38,8 @@ import (
 	"runtime"
 	"strings"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/emgeorrk/pulse/internal/entity"
+	"golang.org/x/sys/unix"
 )
 
 // ReadHWInfo determines the chip, Mac model, and macOS version. sysctl

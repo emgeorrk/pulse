@@ -26,19 +26,25 @@ func (m *MultiTemp) Temps() ([]entity.Reading, error) {
 		firstErr error
 		ok       bool
 	)
+
 	for _, s := range m.sources {
 		readings, err := s.Temps()
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
+
 			continue
 		}
+
 		ok = true
+
 		merged = append(merged, readings...)
 	}
+
 	if !ok {
 		return nil, firstErr
 	}
+
 	return merged, nil
 }

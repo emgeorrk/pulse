@@ -49,9 +49,8 @@ import "C"
 import (
 	"fmt"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/emgeorrk/pulse/internal/entity"
+	"golang.org/x/sys/unix"
 )
 
 // Disk: root-volume usage via statfs, I/O via IOKit IOBlockStorageDriver

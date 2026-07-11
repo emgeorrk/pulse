@@ -21,15 +21,15 @@ import (
 // in fill(); a metric-level icon (network arrows) already carries the
 // qualifier, so its iconQual stays empty.
 type metric struct {
-	id       entity.MetricID
-	label    string
-	tag      string // bar prefix in text mode, with its own spacing: "CPU ", "↓"
-	sym      string // qualifier kept next to a visual: "↓", "SW ", "G"
-	icon     string // icon key; metric-level override or the group's
-	emoji    string
-	iconQual string
 	menu     func(s entity.Snapshot, c config.Config) string
 	bar      func(s entity.Snapshot, c config.Config) string
+	id       entity.MetricID
+	label    string
+	tag      string
+	sym      string
+	icon     string
+	emoji    string
+	iconQual string
 }
 
 // barValue is the compact value for the menu bar; without an explicit bar
@@ -38,6 +38,7 @@ func (m metric) barValue(s entity.Snapshot, c config.Config) string {
 	if m.bar != nil {
 		return m.bar(s, c)
 	}
+
 	return m.menu(s, c)
 }
 
@@ -48,9 +49,11 @@ func (m metric) barPart(s entity.Snapshot, c config.Config) (iconKey, text strin
 	if c.BarLabels != config.BarVisual {
 		return "", m.tag + val
 	}
+
 	if c.VisualStyle == config.VisualGnome {
 		return m.icon, " " + m.iconQual + val
 	}
+
 	return "", m.emoji + " " + m.sym + val
 }
 
@@ -60,9 +63,11 @@ func (m metric) fill(g group) metric {
 		m.icon = g.icon
 		m.iconQual = m.sym
 	}
+
 	if m.emoji == "" {
 		m.emoji = g.emoji
 	}
+
 	return m
 }
 
@@ -106,17 +111,19 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 					if s.Freq == nil {
 						return "—"
 					}
+
 					return format.Hertz(s.Freq.Max)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Freq == nil {
 						return "—GHz"
 					}
+
 					return strings.ReplaceAll(format.Hertz(s.Freq.Max), " ", "")
 				},
 			})
+
 		for _, cl := range caps.FreqClusters {
-			cl := cl
 			cpu.metrics = append(cpu.metrics, metric{
 				id:    entity.MetricID("cpu.freq." + cl),
 				label: cl,
@@ -128,11 +135,13 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 							}
 						}
 					}
+
 					return "—"
 				},
 			})
 		}
 	}
+
 	for i := 0; i < hw.NumCores; i++ {
 		core := i // capture the index
 		cpu.metrics = append(cpu.metrics, metric{
@@ -142,6 +151,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 				if core < len(s.CPU.Cores) {
 					return format.Percent(s.CPU.Cores[core])
 				}
+
 				return "—"
 			},
 		})
@@ -212,27 +222,35 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 	if caps.Temps {
 		groups = append(groups, tempGroup(caps.TempSensors))
 	}
+
 	if caps.Fans {
 		groups = append(groups, fanGroup(caps.FanCount))
 	}
+
 	if caps.Volts {
 		groups = append(groups, voltGroup(caps.VoltSensors))
 	}
+
 	if caps.Net {
 		groups = append(groups, netGroup(caps.NetIfaces))
 	}
+
 	if caps.Disk {
 		groups = append(groups, diskGroup())
 	}
+
 	if caps.GPU {
 		groups = append(groups, gpuGroup())
 	}
+
 	if caps.Power {
 		groups = append(groups, powerGroup())
 	}
+
 	if caps.Battery {
 		groups = append(groups, batteryGroup())
 	}
+
 	return groups
 }
 
@@ -245,6 +263,7 @@ func gpuGroup() group {
 			if s.GPU == nil {
 				return "—"
 			}
+
 			return format.Percent(s.GPU.Utilization)
 		},
 		metrics: []metric{
@@ -256,6 +275,7 @@ func gpuGroup() group {
 					if s.GPU == nil {
 						return "—"
 					}
+
 					return format.Percent(s.GPU.Utilization)
 				},
 			},
@@ -269,9 +289,11 @@ func powerGroup() group {
 			if s.Power == nil {
 				return "—"
 			}
+
 			return format.Watts(get(s.Power))
 		}
 	}
+
 	return group{
 		emoji: "🔌",
 		icon:  icons.Voltage, // the set has no dedicated power icon; the bolt fits watts
@@ -280,6 +302,7 @@ func powerGroup() group {
 			if s.Power == nil {
 				return "—"
 			}
+
 			return format.Watts(s.Power.Total)
 		},
 		metrics: []metric{
@@ -291,6 +314,7 @@ func powerGroup() group {
 					if s.Power == nil {
 						return "—W"
 					}
+
 					return format.Watts(s.Power.Total)
 				},
 			},
@@ -310,10 +334,12 @@ func batteryGroup() group {
 			if s.Battery == nil {
 				return "—"
 			}
+
 			state := ""
 			if s.Battery.Charging {
 				state = " ⚡"
 			}
+
 			return format.Percent(s.Battery.Percent) + state
 		},
 		metrics: []metric{
@@ -325,6 +351,7 @@ func batteryGroup() group {
 					if s.Battery == nil {
 						return "—"
 					}
+
 					return format.Percent(s.Battery.Percent)
 				},
 			},
@@ -351,6 +378,7 @@ func batteryGroup() group {
 					if s.Battery == nil || s.Battery.MinutesLeft < 0 {
 						return "—"
 					}
+
 					return fmt.Sprintf("%dh %02dm", s.Battery.MinutesLeft/60, s.Battery.MinutesLeft%60)
 				},
 			},
@@ -361,6 +389,7 @@ func batteryGroup() group {
 					if s.Battery == nil {
 						return "—"
 					}
+
 					return format.Watts(s.Battery.Watts)
 				},
 			},
@@ -371,6 +400,7 @@ func batteryGroup() group {
 					if s.Battery == nil || s.Battery.Health == 0 {
 						return "—"
 					}
+
 					return format.Percent(s.Battery.Health)
 				},
 			},
@@ -381,6 +411,7 @@ func batteryGroup() group {
 					if s.Battery == nil {
 						return "—"
 					}
+
 					return fmt.Sprintf("%d", s.Battery.Cycles)
 				},
 			},
@@ -391,6 +422,7 @@ func batteryGroup() group {
 					if s.Battery == nil {
 						return "—"
 					}
+
 					return format.Temp(s.Battery.TempC, c.TempUnit == config.Fahrenheit)
 				},
 			},
@@ -401,6 +433,7 @@ func batteryGroup() group {
 					if s.Battery == nil {
 						return "—"
 					}
+
 					return format.Volts(s.Battery.Volts)
 				},
 			},
@@ -417,9 +450,11 @@ func tempGroup(sensorNames []string) group {
 			if s.Temps == nil {
 				return "—"
 			}
+
 			if s.Temps.CPU > 0 {
 				return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
 			}
+
 			return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
 		},
 		metrics: []metric{
@@ -430,12 +465,14 @@ func tempGroup(sensorNames []string) group {
 					if s.Temps == nil || s.Temps.CPU == 0 {
 						return "—"
 					}
+
 					return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.CPU == 0 {
 						return "—°"
 					}
+
 					return format.TempShort(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
 				},
 			},
@@ -448,12 +485,14 @@ func tempGroup(sensorNames []string) group {
 					if s.Temps == nil || s.Temps.GPU == 0 {
 						return "—"
 					}
+
 					return format.Temp(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.GPU == 0 {
 						return "—°"
 					}
+
 					return format.TempShort(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
 				},
 			},
@@ -464,6 +503,7 @@ func tempGroup(sensorNames []string) group {
 					if s.Temps == nil || s.Temps.Hottest.Name == "" {
 						return "—"
 					}
+
 					return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit) +
 						" (" + s.Temps.Hottest.Name + ")"
 				},
@@ -471,13 +511,14 @@ func tempGroup(sensorNames []string) group {
 					if s.Temps == nil || s.Temps.Hottest.Name == "" {
 						return "—°"
 					}
+
 					return format.TempShort(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
 				},
 			},
 		},
 	}
+
 	for _, name := range sensorNames {
-		name := name
 		g.metrics = append(g.metrics, metric{
 			id:    entity.MetricID("temp.sensor." + name),
 			label: name,
@@ -489,10 +530,12 @@ func tempGroup(sensorNames []string) group {
 						}
 					}
 				}
+
 				return "—"
 			},
 		})
 	}
+
 	return g
 }
 
@@ -508,9 +551,11 @@ func fanGroup(count int) group {
 					max = f.RPM
 				}
 			}
+
 			return format.RPM(max)
 		},
 	}
+
 	for i := 0; i < count; i++ {
 		idx := i
 		g.metrics = append(g.metrics, metric{
@@ -522,18 +567,22 @@ func fanGroup(count int) group {
 					if f.Max > 0 {
 						return fmt.Sprintf("%s (%s)", format.RPM(f.RPM), format.Percent(f.RPM/f.Max))
 					}
+
 					return format.RPM(f.RPM)
 				}
+
 				return "—"
 			},
 			bar: func(s entity.Snapshot, c config.Config) string {
 				if idx < len(s.Fans) {
 					return fmt.Sprintf("%drpm", int(s.Fans[idx].RPM))
 				}
+
 				return "—rpm"
 			},
 		})
 	}
+
 	return g
 }
 
@@ -546,11 +595,12 @@ func voltGroup(sensorNames []string) group {
 			if len(s.Volts) == 0 {
 				return "—"
 			}
+
 			return format.Volts(s.Volts[0].Value)
 		},
 	}
+
 	for _, name := range sensorNames {
-		name := name
 		g.metrics = append(g.metrics, metric{
 			id:    entity.MetricID("volt.sensor." + name),
 			label: name,
@@ -560,10 +610,12 @@ func voltGroup(sensorNames []string) group {
 						return format.Volts(r.Value)
 					}
 				}
+
 				return "—"
 			},
 		})
 	}
+
 	return g
 }
 
@@ -576,6 +628,7 @@ func netGroup(ifaces []string) group {
 			if s.Net == nil {
 				return "—"
 			}
+
 			return "↓" + format.SpeedShort(s.Net.Down) + " ↑" + format.SpeedShort(s.Net.Up)
 		},
 		metrics: []metric{
@@ -589,12 +642,14 @@ func netGroup(ifaces []string) group {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.Speed(s.Net.Down)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.SpeedShort(s.Net.Down)
 				},
 			},
@@ -608,12 +663,14 @@ func netGroup(ifaces []string) group {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.Speed(s.Net.Up)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.SpeedShort(s.Net.Up)
 				},
 			},
@@ -627,12 +684,14 @@ func netGroup(ifaces []string) group {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Net.SessionDown, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Net.SessionDown, c.DecimalBytes)
 				},
 			},
@@ -646,19 +705,21 @@ func netGroup(ifaces []string) group {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Net.SessionUp, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Net.SessionUp, c.DecimalBytes)
 				},
 			},
 		},
 	}
+
 	for _, name := range ifaces {
-		name := name
 		g.metrics = append(g.metrics, metric{
 			id:    entity.MetricID("net.iface." + name),
 			label: name,
@@ -670,10 +731,12 @@ func netGroup(ifaces []string) group {
 						}
 					}
 				}
+
 				return "idle"
 			},
 		})
 	}
+
 	return g
 }
 
@@ -686,6 +749,7 @@ func diskGroup() group {
 			if s.Disk == nil {
 				return "—"
 			}
+
 			return format.Percent(s.Disk.UsedFraction())
 		},
 		metrics: []metric{
@@ -697,6 +761,7 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Percent(s.Disk.UsedFraction())
 				},
 			},
@@ -707,12 +772,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Disk.Used, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Disk.Used, c.DecimalBytes)
 				},
 			},
@@ -723,12 +790,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Disk.Available, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Disk.Available, c.DecimalBytes)
 				},
 			},
@@ -739,12 +808,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Disk.Total, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Disk.Total, c.DecimalBytes)
 				},
 			},
@@ -757,12 +828,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Speed(s.Disk.ReadRate)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.SpeedShort(s.Disk.ReadRate)
 				},
 			},
@@ -775,12 +848,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Speed(s.Disk.WriteRate)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.SpeedShort(s.Disk.WriteRate)
 				},
 			},
@@ -793,12 +868,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Disk.ReadTotal, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Disk.ReadTotal, c.DecimalBytes)
 				},
 			},
@@ -811,12 +888,14 @@ func diskGroup() group {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.Bytes(s.Disk.WriteTotal, c.DecimalBytes)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
+
 					return format.BytesShort(s.Disk.WriteTotal, c.DecimalBytes)
 				},
 			},

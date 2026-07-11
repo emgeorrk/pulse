@@ -3,7 +3,7 @@
 package entity
 
 // MetricID is a stable metric identifier used for pinning in the menu bar
-// and settings: "cpu.total", "mem.used", "temp.cpu", "fan.1", "net.down", …
+// and settings: "cpu.total", "mem.used", "temp.cpu", "fan.1", "net.down", ….
 type MetricID string
 
 // CoreTicks holds cumulative load ticks for one core from Mach
@@ -18,9 +18,9 @@ type CoreTicks struct {
 
 // CPUStats holds CPU load over the interval between two samples, as 0..1 fractions.
 type CPUStats struct {
-	Total   float64
 	Cores   []float64
-	History []float64 // recent Total values (oldest → newest), for the sparkline
+	History []float64
+	Total   float64
 }
 
 // MemStats holds physical memory and swap state, in bytes.
@@ -38,6 +38,7 @@ func (m MemStats) UsedFraction() float64 {
 	if m.Total == 0 {
 		return 0
 	}
+
 	return float64(m.Used) / float64(m.Total)
 }
 
@@ -70,11 +71,11 @@ type NetIface struct {
 // NetStats holds network stats: total throughput, session-accumulated
 // traffic, and the per-interface breakdown.
 type NetStats struct {
-	Down        float64 // bytes/s, summed across interfaces
-	Up          float64
-	SessionDown uint64 // bytes since pulse started (boot totals are unreliable: 32-bit counters)
-	SessionUp   uint64
 	Ifaces      []NetIface
+	Down        float64
+	Up          float64
+	SessionDown uint64
+	SessionUp   uint64
 }
 
 // DiskUsage holds root-volume usage, in bytes.
@@ -88,6 +89,7 @@ func (d DiskUsage) UsedFraction() float64 {
 	if d.Total == 0 {
 		return 0
 	}
+
 	return float64(d.Used) / float64(d.Total)
 }
 
@@ -108,10 +110,10 @@ type Reading struct {
 
 // TempStats holds aggregates + every temperature sensor.
 type TempStats struct {
-	CPU     float64 // average across CPU sensors; 0 = could not be determined
-	GPU     float64
 	Hottest Reading
 	All     []Reading
+	CPU     float64
+	GPU     float64
 }
 
 // Fan is a single fan: current RPM and its rated limits.
@@ -158,34 +160,34 @@ type FreqStats struct {
 // Caps records which metric groups are actually available on this hardware;
 // the UI hides groups that aren't (per CLAUDE.md: hide, don't crash).
 type Caps struct {
-	Net          bool
-	NetIfaces    []string // interfaces that had traffic at startup
-	Disk         bool
-	Temps        bool
-	TempSensors  []string // sensor names at startup (menu entries)
-	Volts        bool
 	VoltSensors  []string
-	Fans         bool
+	NetIfaces    []string
+	FreqClusters []string
+	TempSensors  []string
 	FanCount     int
+	Temps        bool
+	Volts        bool
+	Fans         bool
+	Net          bool
 	Battery      bool
 	GPU          bool
 	Power        bool
 	Freq         bool
-	FreqClusters []string // cluster channel names (MCPU0/PCPU/…)
+	Disk         bool
 }
 
 // Snapshot is one frame of all metrics sent to the UI. Groups that may be
 // absent on this hardware or in this frame are pointers.
 type Snapshot struct {
-	CPU     CPUStats
-	Mem     MemStats
 	Net     *NetStats
 	Disk    *DiskStats
 	Temps   *TempStats
-	Volts   []Reading
-	Fans    []Fan
 	Battery *BatteryStats
 	GPU     *GPUStats
 	Power   *PowerStats
 	Freq    *FreqStats
+	CPU     CPUStats
+	Volts   []Reading
+	Fans    []Fan
+	Mem     MemStats
 }

@@ -23,9 +23,8 @@ import (
 	"fmt"
 	"unsafe"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/emgeorrk/pulse/internal/entity"
+	"golang.org/x/sys/unix"
 )
 
 // Mem reads memory state via Mach host_statistics64() and sysctl.

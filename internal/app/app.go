@@ -23,6 +23,7 @@ func loadStore() *config.Store {
 	if err != nil {
 		path = "" // settings will live in memory only
 	}
+
 	return config.Load(path)
 }
 
@@ -34,13 +35,16 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	if err != nil {
 		return sensors.Sources{}, entity.Caps{}, fmt.Errorf("memory sensor: %w", err)
 	}
+
 	src := sensors.Sources{CPU: sensors.NewCPU(), Mem: mem}
+
 	var caps entity.Caps
 
 	net := sensors.NewNet()
 	if counters, err := net.Counters(); err == nil {
 		src.Net = net
 		caps.Net = true
+
 		for _, c := range counters {
 			// menu only lists interfaces that already had traffic at startup
 			if c.Rx > 0 || c.Tx > 0 {
@@ -61,13 +65,16 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 		if hid, err := sensors.NewHID(); err == nil {
 			if temps, err := hid.Temps(); err == nil {
 				src.Temp = hid
+
 				caps.Temps = true
 				for _, r := range temps {
 					caps.TempSensors = append(caps.TempSensors, r.Name)
 				}
 			}
+
 			if volts, err := hid.Voltages(); err == nil {
 				src.Volt = hid
+
 				caps.Volts = true
 				for _, r := range volts {
 					caps.VoltSensors = append(caps.VoltSensors, r.Name)
@@ -82,6 +89,7 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 		if !hw.IsAppleSilicon {
 			if temps, err := smc.Temps(); err == nil {
 				src.Temp = smc
+
 				caps.Temps = true
 				for _, r := range temps {
 					caps.TempSensors = append(caps.TempSensors, r.Name)
@@ -98,8 +106,10 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 				src.Temp = gpuSrc // HID unavailable but SMC GPU keys readable
 				caps.Temps = true
 			}
+
 			caps.TempSensors = append(caps.TempSensors, names...)
 		}
+
 		if fans, err := smc.Fans(); err == nil {
 			src.Fan = smc
 			caps.Fans = true
@@ -122,6 +132,7 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	if ior, err := sensors.NewIOReport(); err == nil {
 		src.Power = ior
 		caps.Power = true
+
 		if ior.HasFreq() {
 			src.Freq = ior
 			caps.Freq = true
@@ -141,11 +152,13 @@ func Run() error {
 	if err != nil {
 		return err
 	}
+
 	mon := usecase.NewMonitor(src, store)
 
 	tray.New(store, hw, caps).Run(func(ctx context.Context) <-chan entity.Snapshot {
 		return mon.Start(ctx)
 	})
+
 	return nil
 }
 
@@ -160,16 +173,19 @@ func RunOnce() error {
 	if err != nil {
 		return err
 	}
+
 	mon := usecase.NewMonitor(src, store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	snap, ok := <-mon.Start(ctx)
 	if !ok {
 		return fmt.Errorf("monitor stopped before first sample")
 	}
 
 	dec := cfg.DecimalBytes
+
 	perCore := make([]string, len(snap.CPU.Cores))
 	for i, c := range snap.CPU.Cores {
 		perCore[i] = format.Percent(c)
@@ -179,15 +195,19 @@ func RunOnce() error {
 		hw.Chip, hw.Model, hw.OSVersion, hw.NumCores, hw.IsAppleSilicon)
 	fmt.Printf("CPU total: %s (over %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
 	fmt.Printf("CPU cores: %s\n", strings.Join(perCore, " "))
+
 	if snap.Freq != nil {
 		fmt.Printf("CPU freq: %s", format.Hertz(snap.Freq.Max))
+
 		for _, r := range snap.Freq.Clusters {
 			fmt.Printf(" · %s %s", r.Name, format.Hertz(r.Value))
 		}
+
 		fmt.Println()
 	} else {
 		fmt.Println("CPU freq: unavailable")
 	}
+
 	fmt.Printf("Mem: used %s / %s (%s), available %s, free %s\n",
 		format.Bytes(snap.Mem.Used, dec), format.Bytes(snap.Mem.Total, dec),
 		format.Percent(snap.Mem.UsedFraction()),
@@ -197,9 +217,11 @@ func RunOnce() error {
 
 	if snap.Net != nil {
 		fmt.Printf("Net: ↓%s ↑%s", format.Speed(snap.Net.Down), format.Speed(snap.Net.Up))
+
 		for _, i := range snap.Net.Ifaces {
 			fmt.Printf(" · %s ↓%s ↑%s", i.Name, format.SpeedShort(i.Down), format.SpeedShort(i.Up))
 		}
+
 		fmt.Println()
 	} else {
 		fmt.Println("Net: unavailable")
@@ -221,6 +243,7 @@ func RunOnce() error {
 			format.Temp(snap.Temps.CPU, f), format.Temp(snap.Temps.GPU, f),
 			format.Temp(snap.Temps.Hottest.Value, f), snap.Temps.Hottest.Name,
 			len(snap.Temps.All))
+
 		for _, r := range snap.Temps.All {
 			fmt.Printf("  %-40s %s\n", r.Name, format.Temp(r.Value, f))
 		}
@@ -239,6 +262,7 @@ func RunOnce() error {
 
 	if len(snap.Volts) > 0 {
 		fmt.Printf("Voltage: %d sensors\n", len(snap.Volts))
+
 		for _, r := range snap.Volts {
 			fmt.Printf("  %-40s %s\n", r.Name, format.Volts(r.Value))
 		}
@@ -262,12 +286,14 @@ func RunOnce() error {
 
 	if snap.Battery != nil {
 		b := snap.Battery
+
 		state := "discharging"
 		if b.Charging {
 			state = "charging"
 		} else if b.External {
 			state = "AC"
 		}
+
 		fmt.Printf("Battery: %s (%s) · health %s · %d cycles · %s · %s · %s\n",
 			format.Percent(b.Percent), state, format.Percent(b.Health), b.Cycles,
 			format.Temp(b.TempC, f), format.Volts(b.Volts), format.Watts(b.Watts))
