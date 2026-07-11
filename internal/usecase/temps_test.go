@@ -28,6 +28,30 @@ func TestAggregateTemps(t *testing.T) {
 	}
 }
 
+func TestAggregateTempsM5SMCFallback(t *testing.T) {
+	// M5-style set: HID exposes only generic "PMU tdie*" names, the GPU
+	// reading is the averaged SMC Tg* value merged in by sensors.MultiTemp.
+	all := []entity.Reading{
+		{Name: "PMU tdie1", Value: 35},
+		{Name: "PMU tdie2", Value: 36},
+		{Name: "PMU tdie3", Value: 37},
+		{Name: "GPU die", Value: 42.5},
+		{Name: "NAND CH0 temp", Value: 31},
+	}
+
+	got := AggregateTemps(all)
+
+	if !almostEqual(got.CPU, 36) {
+		t.Errorf("CPU = %v, want 36 (average of tdie1..3)", got.CPU)
+	}
+	if !almostEqual(got.GPU, 42.5) {
+		t.Errorf("GPU = %v, want 42.5", got.GPU)
+	}
+	if got.Hottest.Name != "GPU die" || !almostEqual(got.Hottest.Value, 42.5) {
+		t.Errorf("Hottest = %+v, want GPU die/42.5", got.Hottest)
+	}
+}
+
 func TestAggregateTempsNoMatches(t *testing.T) {
 	got := AggregateTemps([]entity.Reading{{Name: "NAND CH0 temp", Value: 40}})
 	if got.CPU != 0 || got.GPU != 0 {

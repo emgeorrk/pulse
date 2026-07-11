@@ -87,6 +87,18 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 					caps.TempSensors = append(caps.TempSensors, r.Name)
 				}
 			}
+		} else if names := smc.GPUTempSensors(); len(names) > 0 {
+			// Apple Silicon: HID exposes no GPU-named temperature sensors on
+			// some generations (M5: only "PMU tdie*"), but SMC does via Tg*
+			// keys. Merge them so AggregateTemps fills the GPU slot.
+			gpuSrc := sensors.TempFunc(smc.GPUTemps)
+			if src.Temp != nil {
+				src.Temp = sensors.NewMultiTemp(src.Temp, gpuSrc)
+			} else {
+				src.Temp = gpuSrc // HID unavailable but SMC GPU keys readable
+				caps.Temps = true
+			}
+			caps.TempSensors = append(caps.TempSensors, names...)
 		}
 		if fans, err := smc.Fans(); err == nil {
 			src.Fan = smc

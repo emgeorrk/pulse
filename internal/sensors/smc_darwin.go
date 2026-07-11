@@ -45,9 +45,10 @@ typedef struct {
 } SMCParamStruct;
 
 enum {
-	kSMCHandleYPCEvent = 2,
-	kSMCReadKey        = 5,
-	kSMCGetKeyInfo     = 9,
+	kSMCHandleYPCEvent  = 2,
+	kSMCReadKey         = 5,
+	kSMCGetKeyFromIndex = 8,
+	kSMCGetKeyInfo      = 9,
 };
 
 static int pulse_smc_open(io_connect_t *conn) {
@@ -100,19 +101,37 @@ static int pulse_smc_read(io_connect_t conn, uint32_t key,
 	memcpy(bytes, out.bytes, 32);
 	return 0;
 }
+
+// pulse_smc_key_at_index returns the fourcc of the key at the given index
+// (0 .. "#KEY"-1); used to enumerate every key the SMC exposes.
+static int pulse_smc_key_at_index(io_connect_t conn, uint32_t index, uint32_t *key) {
+	SMCParamStruct in, out;
+	memset(&in, 0, sizeof(in));
+	memset(&out, 0, sizeof(out));
+	in.data8  = kSMCGetKeyFromIndex;
+	in.data32 = index;
+	int rc = pulse_smc_call(conn, &in, &out);
+	if (rc != 0) return rc;
+	*key = out.key;
+	return 0;
+}
 */
 import "C"
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
 // SMC is an AppleSMC client (works on both Intel and Apple Silicon).
-// Here: fans (both platforms) and temperatures (the Intel path).
+// Here: fans (both platforms), temperatures (the Intel path), and the
+// Apple Silicon GPU temperature keys (Tg*).
 type SMC struct {
-	conn C.io_connect_t
+	conn    C.io_connect_t
+	gpuOnce sync.Once
+	gpuKeys []string // discovered Apple Silicon "Tg*" GPU temperature keys
 }
 
 func NewSMC() (*SMC, error) {
@@ -216,4 +235,79 @@ func (s *SMC) Temps() ([]entity.Reading, error) {
 		return nil, fmt.Errorf("no readable temperature keys")
 	}
 	return out, nil
+}
+
+// keyCount returns the total number of keys the SMC exposes ("#KEY").
+func (s *SMC) keyCount() (int, error) {
+	n, err := s.ReadKey("#KEY")
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+// keyAtIndex returns the 4-char name of the key at the given index.
+func (s *SMC) keyAtIndex(i int) (string, error) {
+	var key C.uint32_t
+	if rc := C.pulse_smc_key_at_index(s.conn, C.uint32_t(i), &key); rc != 0 {
+		return "", fmt.Errorf("SMC key at index %d: rc=%d", i, int(rc))
+	}
+	return smcKeyString(uint32(key)), nil
+}
+
+// discoverGPUTempKeys enumerates every SMC key and keeps the readable Tg*
+// ones. Values are deliberately not checked: a power-gated GPU may report
+// 0 °C at startup, and dropping its key here would hide it forever.
+func (s *SMC) discoverGPUTempKeys() {
+	count, err := s.keyCount()
+	if err != nil {
+		return
+	}
+	for i := 0; i < count; i++ {
+		key, err := s.keyAtIndex(i)
+		if err != nil || !isGPUTempKey(key) {
+			continue
+		}
+		if _, err := s.ReadKey(key); err != nil {
+			continue
+		}
+		s.gpuKeys = append(s.gpuKeys, key)
+	}
+}
+
+// GPUTempSensors returns the display labels contributed by the discovered
+// Apple Silicon GPU temperature keys. Discovery runs once, lazily.
+func (s *SMC) GPUTempSensors() []string {
+	s.gpuOnce.Do(s.discoverGPUTempKeys)
+	if len(s.gpuKeys) == 0 {
+		return nil
+	}
+	return []string{gpuTempSensorName}
+}
+
+// GPUTemps reads the discovered Tg* keys and averages them into a single
+// "GPU die" reading. Implausible values (v ≤ 0 or v > 125) are skipped for
+// this tick only; the key set never shrinks. It errors only when no keys
+// were discovered.
+func (s *SMC) GPUTemps() ([]entity.Reading, error) {
+	s.gpuOnce.Do(s.discoverGPUTempKeys)
+	if len(s.gpuKeys) == 0 {
+		return nil, fmt.Errorf("no GPU temperature keys")
+	}
+	var (
+		sum float64
+		n   int
+	)
+	for _, key := range s.gpuKeys {
+		v, err := s.ReadKey(key)
+		if err != nil || v <= 0 || v > 125 {
+			continue
+		}
+		sum += v
+		n++
+	}
+	if n == 0 {
+		return nil, nil // keys exist but every value is implausible this tick
+	}
+	return []entity.Reading{{Name: gpuTempSensorName, Value: sum / float64(n)}}, nil
 }
