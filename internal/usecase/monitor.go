@@ -12,7 +12,7 @@ import (
 )
 
 // historyLen is how many recent CPU values to keep for the sparkline.
-const historyLen = 12
+const historyLen = 8
 
 type Monitor struct {
 	src   sensors.Sources
