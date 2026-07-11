@@ -85,7 +85,7 @@ func (t *Tray) build() {
 	for gi := range t.groups {
 		g := &t.groups[gi]
 
-		g.item = systray.AddMenuItem(g.headerTitle(cfg, ""), "")
+		g.item = systray.AddMenuItem(g.headerTitle(""), "")
 		for metricIndex := range g.metrics {
 			m := &g.metrics[metricIndex]
 			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
@@ -99,7 +99,7 @@ func (t *Tray) build() {
 
 	systray.AddSeparator()
 
-	t.sys = systray.AddMenuItem(sysTitle(cfg), "")
+	t.sys = systray.AddMenuItem("System", "")
 	t.sys.AddSubMenuItem(t.hw.Chip, "")
 
 	switch {
@@ -126,14 +126,11 @@ func (t *Tray) build() {
 	}()
 }
 
-// headerTitle is the group header text for the current visual style; in the
-// gnome style the emoji is replaced by a template icon on the item itself.
-func (g *groupUI) headerTitle(cfg config.Config, aggregate string) string {
+// headerTitle is the group header text plus the live aggregate; the group's
+// visual (emoji or template icon) lives in the item's icon slot, never in
+// the text.
+func (g *groupUI) headerTitle(aggregate string) string {
 	title := g.label
-	if cfg.VisualStyle != config.VisualGnome {
-		title = g.emoji + " " + title
-	}
-
 	if aggregate != "" {
 		title += " · " + aggregate
 	}
@@ -141,25 +138,19 @@ func (g *groupUI) headerTitle(cfg config.Config, aggregate string) string {
 	return title
 }
 
-func sysTitle(cfg config.Config) string {
-	if cfg.VisualStyle == config.VisualGnome {
-		return "System"
-	}
+// Emoji for the System and Settings items in the emoji style; the groups
+// carry their own emoji in the registry.
+const (
+	sysEmoji      = "ℹ️"
+	settingsEmoji = "🛠️"
+)
 
-	return "ℹ️ System"
-}
-
-func settingsTitle(cfg config.Config) string {
-	if cfg.VisualStyle == config.VisualGnome {
-		return "Settings"
-	}
-
-	return "🛠️ Settings"
-}
-
-// applyVisualStyle sets or clears the dropdown icons. Called from build and
-// whenever the style setting changes — not on every frame, so the images
-// aren't re-decoded each tick.
+// applyVisualStyle swaps the dropdown icons between the emoji and gnome
+// sets. Both styles put an image on the item, so a live switch only
+// replaces image contents — an open menu never gains or loses its icon
+// column, which AppKit fails to re-lay out (rows keep a stale indent).
+// Called from build and on a style change — not on every frame, so the
+// images aren't re-decoded each tick.
 func (t *Tray) applyVisualStyle(cfg config.Config) {
 	gnome := cfg.VisualStyle == config.VisualGnome
 
@@ -168,27 +159,23 @@ func (t *Tray) applyVisualStyle(cfg config.Config) {
 		if gnome {
 			setTemplateIcon(g.item, g.icon)
 		} else {
-			g.item.ClearIcon()
+			g.item.SetEmojiIcon(g.emoji)
 		}
 	}
 
 	if t.sys != nil {
-		t.sys.SetTitle(sysTitle(cfg))
-
 		if gnome {
 			setTemplateIcon(t.sys, icons.System)
 		} else {
-			t.sys.ClearIcon()
+			t.sys.SetEmojiIcon(sysEmoji)
 		}
 	}
 
 	if t.settings != nil {
-		t.settings.SetTitle(settingsTitle(cfg))
-
 		if gnome {
 			setTemplateIcon(t.settings, icons.Settings)
 		} else {
-			t.settings.ClearIcon()
+			t.settings.SetEmojiIcon(settingsEmoji)
 		}
 	}
 
@@ -206,7 +193,7 @@ func setTemplateIcon(item *systray.MenuItem, key string) {
 }
 
 func (t *Tray) buildSettings(cfg config.Config) { //nolint:funlen,gocognit // Settings construction mirrors the menu hierarchy.
-	s := systray.AddMenuItem(settingsTitle(cfg), "")
+	s := systray.AddMenuItem("Settings", "")
 	t.settings = s
 
 	// update interval — radio group
@@ -253,8 +240,8 @@ func (t *Tray) buildSettings(cfg config.Config) { //nolint:funlen,gocognit // Se
 	go t.watchRadio(binU, decU, func(c *config.Config) { c.DecimalBytes = false })
 	go t.watchRadio(decU, binU, func(c *config.Config) { c.DecimalBytes = true })
 
-	// visual style — radio group; render picks up the change and restyles
-	// the dropdown via applyVisualStyle
+	// visual style — radio group; render picks up the change and swaps the
+	// dropdown icons via applyVisualStyle
 	visEmoji := s.AddSubMenuItemCheckbox("Icons: Emoji", "", cfg.VisualStyle == config.VisualEmoji)
 	visGnome := s.AddSubMenuItemCheckbox("Icons: GNOME", "", cfg.VisualStyle == config.VisualGnome)
 
@@ -418,7 +405,7 @@ func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are im
 	styleStale := t.appliedStyle != cfg.VisualStyle
 	t.mu.Unlock()
 
-	if styleStale { // the style radio changed — restyle the dropdown once
+	if styleStale { // the style radio changed — swap the dropdown icons once
 		t.applyVisualStyle(cfg)
 	}
 
@@ -429,7 +416,7 @@ func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are im
 	for gi := range t.groups {
 		g := &t.groups[gi]
 		if g.aggregate != nil {
-			g.item.SetTitle(g.headerTitle(cfg, g.aggregate(s, cfg)))
+			g.item.SetTitle(g.headerTitle(g.aggregate(s, cfg)))
 		}
 
 		for i := range g.metrics {

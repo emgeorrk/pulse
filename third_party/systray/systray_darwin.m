@@ -665,6 +665,28 @@ void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool templat
   }
 }
 
+// PATCH(pulse): render an emoji into the menu item's icon slot. Keeping an
+// image in every visual style means a style switch only swaps image
+// contents — an open menu never gains or loses its icon column, which
+// AppKit fails to re-lay out live (rows keep a stale indent).
+void setMenuItemEmojiIcon(int menuId, char* cemoji) {
+  NSString* emoji = [[NSString alloc] initWithCString:cemoji
+                                             encoding:NSUTF8StringEncoding];
+  free(cemoji);
+  NSImage *image = [NSImage imageWithSize:NSMakeSize(16, 16)
+                                  flipped:NO
+                           drawingHandler:^BOOL(NSRect dst) {
+    NSDictionary *attrs = @{NSFontAttributeName : [NSFont systemFontOfSize:13]};
+    NSSize sz = [emoji sizeWithAttributes:attrs];
+    [emoji drawAtPoint:NSMakePoint(NSMidX(dst) - sz.width / 2,
+                                   NSMidY(dst) - sz.height / 2)
+        withAttributes:attrs];
+    return YES;
+  }];
+  NSNumber *mId = [NSNumber numberWithInt:menuId];
+  runInMainThread(@selector(setMenuItemIcon:), @[image, (id)mId]);
+}
+
 void setTitle(char* ctitle) {
   NSString* title = [[NSString alloc] initWithCString:ctitle
                                              encoding:NSUTF8StringEncoding];

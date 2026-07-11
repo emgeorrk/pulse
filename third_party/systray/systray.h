@@ -13,6 +13,7 @@ void nativeStart(void);
 
 void setIcon(const char* iconBytes, int length, bool template);
 void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool template);
+void setMenuItemEmojiIcon(int menuId, char* emoji);
 void clearMenuItemIcon(int menuId);
 void setTitle(char* title);
 void registerTitleIcon(char* key, const char* iconBytes, int length);

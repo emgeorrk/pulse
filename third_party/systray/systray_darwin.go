@@ -128,6 +128,14 @@ func SetTitleParts(parts []TitlePart) {
 	C.setTitleParts(C.CString(encodeTitleParts(parts)))
 }
 
+// SetEmojiIcon renders emoji into the menu item's icon slot (macOS only).
+// PATCH(pulse): with an image present in every visual style, a style switch
+// only swaps image contents — an open menu never gains or loses its icon
+// column, which AppKit re-lays out incorrectly while the menu is showing.
+func (item *MenuItem) SetEmojiIcon(emoji string) {
+	C.setMenuItemEmojiIcon(C.int(item.id), C.CString(emoji))
+}
+
 // ClearIcon removes the icon of a menu item.
 func (item *MenuItem) ClearIcon() {
 	C.clearMenuItemIcon(C.int(item.id))
@@ -240,3 +248,4 @@ func systray_menu_will_open() {
 	default:
 	}
 }
+
