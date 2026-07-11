@@ -61,12 +61,13 @@ func NewDisk() *Disk { return &Disk{} }
 
 func (*Disk) Usage() (entity.DiskUsage, error) {
 	var st unix.Statfs_t
-	if err := unix.Statfs("/", &st); err != nil {
+	if err := unix.Statfs("/", &st); err != nil { //nolint:gocritic // The inline error is checked immediately.
 		return entity.DiskUsage{}, fmt.Errorf("statfs /: %w", err)
 	}
 	bsize := uint64(st.Bsize)
 	total := st.Blocks * bsize
 	avail := st.Bavail * bsize
+
 	return entity.DiskUsage{
 		Total:     total,
 		Used:      total - st.Bfree*bsize,
@@ -77,7 +78,8 @@ func (*Disk) Usage() (entity.DiskUsage, error) {
 func (*Disk) IOTotals() (read, write uint64, err error) {
 	var r, w C.uint64_t
 	if C.pulse_disk_io(&r, &w) != 0 {
-		return 0, 0, fmt.Errorf("IOBlockStorageDriver statistics unavailable")
+		return 0, 0, errDiskStats
 	}
+
 	return uint64(r), uint64(w), nil
 }

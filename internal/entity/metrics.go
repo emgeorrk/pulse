@@ -186,8 +186,8 @@ type Snapshot struct {
 	GPU     *GPUStats
 	Power   *PowerStats
 	Freq    *FreqStats
-	CPU     CPUStats
 	Volts   []Reading
 	Fans    []Fan
+	CPU     CPUStats
 	Mem     MemStats
 }

@@ -1,0 +1,33 @@
+package sensors
+
+import "errors"
+
+var (
+	errBatteryUnavailable = errors.New("AppleSmartBattery unavailable")
+	errCPUInfo            = errors.New("host_processor_info failed")
+	errDiskStats          = errors.New("IOBlockStorageDriver statistics unavailable")
+	errGPUStats           = errors.New("IOAccelerator statistics unavailable")
+	errHIDUnavailable     = errors.New("HID event system unavailable")
+	errHIDClient          = errors.New("HID client not created")
+	errHIDServices        = errors.New("no HID services")
+	errHIDSensors         = errors.New("no readable HID sensors")
+	errIOReport           = errors.New("IOReport Energy Model unavailable")
+	errIOReportSample     = errors.New("IOReport sampling failed")
+	errPerfStates         = errors.New("perf states unavailable")
+	errPerfStatesSample   = errors.New("perf states sampling failed")
+	errClusterResidency   = errors.New("no active cluster residency yet")
+	errPageSize           = errors.New("host_page_size returned 0")
+	errMemoryStats        = errors.New("host_statistics64 failed")
+	errSwapShortRead      = errors.New("vm.swapusage short read")
+	errNetworkCounters    = errors.New("getifaddrs failed")
+	errSMCUnavailable     = errors.New("AppleSMC service unavailable")
+	errSMCKeyLength       = errors.New("SMC key must be 4 chars")
+	errSMCRead            = errors.New("SMC read failed")
+	errNoFans             = errors.New("no fans")
+	errFanKeys            = errors.New("fan keys unreadable")
+	errTemperatureKeys    = errors.New("no readable temperature keys")
+	errSMCKeyIndex        = errors.New("SMC key lookup failed")
+	errGPUTemperatureKeys = errors.New("no GPU temperature keys")
+	errSMCDataShort       = errors.New("SMC data is too short")
+	errSMCDataType        = errors.New("unsupported SMC data type")
+)

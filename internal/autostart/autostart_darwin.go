@@ -11,7 +11,11 @@ import (
 	"path/filepath"
 )
 
-const label = "com.emgeorrk.pulse"
+const (
+	label           = "com.emgeorrk.pulse"
+	directoryMode   = 0o755
+	privateFileMode = 0o600
+)
 
 func plistPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -55,11 +59,11 @@ func Enable() error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), directoryMode); err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, []byte(Plist(exe)), 0o644)
+	return os.WriteFile(path, []byte(Plist(exe)), privateFileMode)
 }
 
 // Disable removes the plist; a missing file is not an error.

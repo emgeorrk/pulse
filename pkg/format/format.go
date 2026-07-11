@@ -10,18 +10,21 @@ import (
 	"strings"
 )
 
-var (
-	binaryUnits  = []string{"B", "KiB", "MiB", "GiB", "TiB", "PiB"}
-	decimalUnits = []string{"B", "KB", "MB", "GB", "TB", "PB"}
-	hertzUnits   = []string{"Hz", "KHz", "MHz", "GHz", "THz"}
-	sparkRunes   = []rune("▁▂▃▄▅▆▇█")
+const (
+	percentScale     = 100
+	decimalScale     = 1000
+	binaryScale      = 1024
+	fahrenheitFactor = 9.0 / 5.0
+	fahrenheitOffset = 32
+	zeroHertz        = "0 Hz"
+	sparklineGlyphs  = "▁▂▃▄▅▆▇█"
 )
 
 // Percent converts a 0..1 fraction to "7%"; out-of-range values are clamped.
 func Percent(v float64) string {
-	p := math.Round(v * 100)
-	if p > 100 {
-		p = 100
+	p := math.Round(v * percentScale)
+	if p > percentScale {
+		p = percentScale
 	}
 
 	if p < 0 {
@@ -57,7 +60,7 @@ func Speed(bytesPerSec float64) string {
 		bytesPerSec = 0
 	}
 
-	val, unit := scale(bytesPerSec, 1000, decimalUnits)
+	val, unit := scale(bytesPerSec, decimalScale, decimalUnits())
 	if unit == "B" {
 		return fmt.Sprintf("%.0f B/s", val)
 	}
@@ -71,7 +74,7 @@ func SpeedShort(bytesPerSec float64) string {
 		bytesPerSec = 0
 	}
 
-	val, unit := scale(bytesPerSec, 1000, decimalUnits)
+	val, unit := scale(bytesPerSec, decimalScale, decimalUnits())
 	if unit == "B" {
 		return fmt.Sprintf("%.0fB/s", val)
 	}
@@ -85,7 +88,7 @@ func Temp(celsius float64, fahrenheit bool) string {
 
 	v := celsius
 	if fahrenheit {
-		v = celsius*9/5 + 32
+		v = celsius*fahrenheitFactor + fahrenheitOffset
 		unit = "F"
 	}
 
@@ -96,7 +99,7 @@ func Temp(celsius float64, fahrenheit bool) string {
 func TempShort(celsius float64, fahrenheit bool) string {
 	v := celsius
 	if fahrenheit {
-		v = celsius*9/5 + 32
+		v = celsius*fahrenheitFactor + fahrenheitOffset
 	}
 
 	return fmt.Sprintf("%d°", int(math.Round(v)))
@@ -120,10 +123,10 @@ func Volts(v float64) string {
 // Hertz formats frequency: "3.5 GHz".
 func Hertz(hz float64) string {
 	if hz <= 0 {
-		return "0 Hz"
+		return zeroHertz
 	}
 
-	val, unit := scale(hz, 1000, hertzUnits)
+	val, unit := scale(hz, decimalScale, hertzUnits())
 
 	return fmt.Sprintf("%.1f %s", val, unit)
 }
@@ -132,6 +135,8 @@ func Hertz(hz float64) string {
 // An empty history yields an empty string.
 func Sparkline(vals []float64) string {
 	var b strings.Builder
+
+	sparkRunes := []rune(sparklineGlyphs)
 
 	for _, v := range vals {
 		if v < 0 {
@@ -153,15 +158,15 @@ func Sparkline(vals []float64) string {
 	return b.String()
 }
 
-func scaleBytes(v uint64, decimal bool) (float64, string) {
+func scaleBytes(v uint64, decimal bool) (value float64, label string) {
 	if decimal {
-		return scale(float64(v), 1000, decimalUnits)
+		return scale(float64(v), decimalScale, decimalUnits())
 	}
 
-	return scale(float64(v), 1024, binaryUnits)
+	return scale(float64(v), binaryScale, binaryUnits())
 }
 
-func scale(v, unit float64, units []string) (float64, string) {
+func scale(v, unit float64, units []string) (value float64, label string) {
 	exp := 0
 	for v >= unit && exp < len(units)-1 {
 		v /= unit
@@ -174,4 +179,16 @@ func scale(v, unit float64, units []string) (float64, string) {
 	}
 
 	return v, units[exp]
+}
+
+func binaryUnits() []string {
+	return []string{"B", "KiB", "MiB", "GiB", "TiB", "PiB"}
+}
+
+func decimalUnits() []string {
+	return []string{"B", "KB", "MB", "GB", "TB", "PB"}
+}
+
+func hertzUnits() []string {
+	return []string{"Hz", "KHz", "MHz", "GHz", "THz"}
 }

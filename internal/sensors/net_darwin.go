@@ -39,11 +39,7 @@ static int pulse_net_counters(pulse_ifstat *out, int max) {
 */
 import "C"
 
-import (
-	"fmt"
-
-	"github.com/emgeorrk/pulse/internal/entity"
-)
+import "github.com/emgeorrk/pulse/internal/entity"
 
 const maxIfaces = 64
 
@@ -57,7 +53,7 @@ func (*Net) Counters() ([]entity.NetCounters, error) {
 	var buf [maxIfaces]C.pulse_ifstat
 	n := int(C.pulse_net_counters(&buf[0], maxIfaces))
 	if n < 0 {
-		return nil, fmt.Errorf("getifaddrs failed")
+		return nil, errNetworkCounters
 	}
 	out := make([]entity.NetCounters, 0, n)
 	for i := 0; i < n; i++ {

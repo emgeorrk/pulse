@@ -7,7 +7,9 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/emgeorrk/pulse/config"
@@ -17,6 +19,8 @@ import (
 	"github.com/emgeorrk/pulse/internal/usecase"
 	"github.com/emgeorrk/pulse/pkg/format"
 )
+
+var errMonitorStopped = errors.New("monitor stopped before first sample")
 
 func loadStore() *config.Store {
 	path, err := config.DefaultPath()
@@ -30,7 +34,7 @@ func loadStore() *config.Store {
 // probe collects the available sources and Caps for the UI. Each sensor is
 // probed with a real read: if it doesn't respond, its group is disabled but
 // the app keeps running.
-func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
+func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) { //nolint:cyclop,funlen,gocognit,gocyclo // Hardware probing deliberately isolates optional sensors.
 	mem, err := sensors.NewMem()
 	if err != nil {
 		return sensors.Sources{}, entity.Caps{}, fmt.Errorf("memory sensor: %w", err)
@@ -60,7 +64,7 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	}
 
 	// ── temps and voltage: Intel and Apple Silicon paths differ ──
-	if hw.IsAppleSilicon {
+	if hw.IsAppleSilicon { //nolint:nestif // HID exposes two independently optional sensor classes.
 		// Apple Silicon: HID is primary for temperatures and voltage.
 		if hid, err := sensors.NewHID(); err == nil {
 			if temps, err := hid.Temps(); err == nil {
@@ -85,7 +89,7 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 
 	// SMC: fans on both platforms; Intel temperatures and the narrow Apple
 	// Silicon GPU fallback use the same connection.
-	if smc, err := sensors.NewSMC(); err == nil {
+	if smc, err := sensors.NewSMC(); err == nil { //nolint:nestif // One SMC connection probes several independent capabilities.
 		if !hw.IsAppleSilicon {
 			if temps, err := smc.Temps(); err == nil {
 				src.Temp = smc
@@ -153,7 +157,7 @@ func Run() error {
 		return err
 	}
 
-	mon := usecase.NewMonitor(src, store)
+	mon := usecase.NewMonitor(&src, store)
 
 	tray.New(store, hw, caps).Run(func(ctx context.Context) <-chan entity.Snapshot {
 		return mon.Start(ctx)
@@ -164,7 +168,7 @@ func Run() error {
 
 // RunOnce prints one metrics frame to stdout and exits — for checking
 // sensors without the UI (pulse -once).
-func RunOnce() error {
+func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic output intentionally handles each optional metric independently.
 	store := loadStore()
 	cfg := store.Get()
 	hw := sensors.ReadHWInfo()
@@ -174,114 +178,115 @@ func RunOnce() error {
 		return err
 	}
 
-	mon := usecase.NewMonitor(src, store)
+	mon := usecase.NewMonitor(&src, store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	snap, ok := <-mon.Start(ctx)
 	if !ok {
-		return fmt.Errorf("monitor stopped before first sample")
+		return errMonitorStopped
 	}
 
 	dec := cfg.DecimalBytes
+	out := os.Stdout
 
 	perCore := make([]string, len(snap.CPU.Cores))
 	for i, c := range snap.CPU.Cores {
 		perCore[i] = format.Percent(c)
 	}
 
-	fmt.Printf("%s · %s · macOS %s · %d cores · apple silicon: %v\n",
+	fmt.Fprintf(out, "%s · %s · macOS %s · %d cores · apple silicon: %v\n",
 		hw.Chip, hw.Model, hw.OSVersion, hw.NumCores, hw.IsAppleSilicon)
-	fmt.Printf("CPU total: %s (over %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
-	fmt.Printf("CPU cores: %s\n", strings.Join(perCore, " "))
+	fmt.Fprintf(out, "CPU total: %s (over %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
+	fmt.Fprintf(out, "CPU cores: %s\n", strings.Join(perCore, " "))
 
 	if snap.Freq != nil {
-		fmt.Printf("CPU freq: %s", format.Hertz(snap.Freq.Max))
+		fmt.Fprintf(out, "CPU freq: %s", format.Hertz(snap.Freq.Max))
 
 		for _, r := range snap.Freq.Clusters {
-			fmt.Printf(" · %s %s", r.Name, format.Hertz(r.Value))
+			fmt.Fprintf(out, " · %s %s", r.Name, format.Hertz(r.Value))
 		}
 
-		fmt.Println()
+		fmt.Fprintln(out)
 	} else {
-		fmt.Println("CPU freq: unavailable")
+		fmt.Fprintln(out, "CPU freq: unavailable")
 	}
 
-	fmt.Printf("Mem: used %s / %s (%s), available %s, free %s\n",
+	fmt.Fprintf(out, "Mem: used %s / %s (%s), available %s, free %s\n",
 		format.Bytes(snap.Mem.Used, dec), format.Bytes(snap.Mem.Total, dec),
 		format.Percent(snap.Mem.UsedFraction()),
 		format.Bytes(snap.Mem.Available, dec), format.Bytes(snap.Mem.Free, dec))
-	fmt.Printf("Swap: used %s / %s\n",
+	fmt.Fprintf(out, "Swap: used %s / %s\n",
 		format.Bytes(snap.Mem.SwapUsed, dec), format.Bytes(snap.Mem.SwapTotal, dec))
 
 	if snap.Net != nil {
-		fmt.Printf("Net: ↓%s ↑%s", format.Speed(snap.Net.Down), format.Speed(snap.Net.Up))
+		fmt.Fprintf(out, "Net: ↓%s ↑%s", format.Speed(snap.Net.Down), format.Speed(snap.Net.Up))
 
 		for _, i := range snap.Net.Ifaces {
-			fmt.Printf(" · %s ↓%s ↑%s", i.Name, format.SpeedShort(i.Down), format.SpeedShort(i.Up))
+			fmt.Fprintf(out, " · %s ↓%s ↑%s", i.Name, format.SpeedShort(i.Down), format.SpeedShort(i.Up))
 		}
 
-		fmt.Println()
+		fmt.Fprintln(out)
 	} else {
-		fmt.Println("Net: unavailable")
+		fmt.Fprintln(out, "Net: unavailable")
 	}
 
 	if snap.Disk != nil {
-		fmt.Printf("Disk: used %s / %s (%s), free %s · R %s W %s · boot R %s W %s\n",
+		fmt.Fprintf(out, "Disk: used %s / %s (%s), free %s · R %s W %s · boot R %s W %s\n",
 			format.Bytes(snap.Disk.Used, dec), format.Bytes(snap.Disk.Total, dec),
 			format.Percent(snap.Disk.UsedFraction()), format.Bytes(snap.Disk.Available, dec),
 			format.Speed(snap.Disk.ReadRate), format.Speed(snap.Disk.WriteRate),
 			format.Bytes(snap.Disk.ReadTotal, dec), format.Bytes(snap.Disk.WriteTotal, dec))
 	} else {
-		fmt.Println("Disk: unavailable")
+		fmt.Fprintln(out, "Disk: unavailable")
 	}
 
 	f := cfg.TempUnit == config.Fahrenheit
 	if snap.Temps != nil {
-		fmt.Printf("Temp: CPU %s · GPU %s · hottest %s (%s) · %d sensors\n",
+		fmt.Fprintf(out, "Temp: CPU %s · GPU %s · hottest %s (%s) · %d sensors\n",
 			format.Temp(snap.Temps.CPU, f), format.Temp(snap.Temps.GPU, f),
 			format.Temp(snap.Temps.Hottest.Value, f), snap.Temps.Hottest.Name,
 			len(snap.Temps.All))
 
 		for _, r := range snap.Temps.All {
-			fmt.Printf("  %-40s %s\n", r.Name, format.Temp(r.Value, f))
+			fmt.Fprintf(out, "  %-40s %s\n", r.Name, format.Temp(r.Value, f))
 		}
 	} else {
-		fmt.Println("Temp: unavailable")
+		fmt.Fprintln(out, "Temp: unavailable")
 	}
 
 	if len(snap.Fans) > 0 {
 		for _, fan := range snap.Fans {
-			fmt.Printf("%s: %s (min %s, max %s)\n",
+			fmt.Fprintf(out, "%s: %s (min %s, max %s)\n",
 				fan.Name, format.RPM(fan.RPM), format.RPM(fan.Min), format.RPM(fan.Max))
 		}
 	} else {
-		fmt.Println("Fans: unavailable")
+		fmt.Fprintln(out, "Fans: unavailable")
 	}
 
 	if len(snap.Volts) > 0 {
-		fmt.Printf("Voltage: %d sensors\n", len(snap.Volts))
+		fmt.Fprintf(out, "Voltage: %d sensors\n", len(snap.Volts))
 
 		for _, r := range snap.Volts {
-			fmt.Printf("  %-40s %s\n", r.Name, format.Volts(r.Value))
+			fmt.Fprintf(out, "  %-40s %s\n", r.Name, format.Volts(r.Value))
 		}
 	} else {
-		fmt.Println("Voltage: unavailable")
+		fmt.Fprintln(out, "Voltage: unavailable")
 	}
 
 	if snap.GPU != nil {
-		fmt.Printf("GPU: %s\n", format.Percent(snap.GPU.Utilization))
+		fmt.Fprintf(out, "GPU: %s\n", format.Percent(snap.GPU.Utilization))
 	} else {
-		fmt.Println("GPU: unavailable")
+		fmt.Fprintln(out, "GPU: unavailable")
 	}
 
 	if snap.Power != nil {
-		fmt.Printf("Power: total %s · CPU %s · GPU %s · ANE %s\n",
+		fmt.Fprintf(out, "Power: total %s · CPU %s · GPU %s · ANE %s\n",
 			format.Watts(snap.Power.Total), format.Watts(snap.Power.CPU),
 			format.Watts(snap.Power.GPU), format.Watts(snap.Power.ANE))
 	} else {
-		fmt.Println("Power: unavailable")
+		fmt.Fprintln(out, "Power: unavailable")
 	}
 
 	if snap.Battery != nil {
@@ -294,11 +299,11 @@ func RunOnce() error {
 			state = "AC"
 		}
 
-		fmt.Printf("Battery: %s (%s) · health %s · %d cycles · %s · %s · %s\n",
+		fmt.Fprintf(out, "Battery: %s (%s) · health %s · %d cycles · %s · %s · %s\n",
 			format.Percent(b.Percent), state, format.Percent(b.Health), b.Cycles,
 			format.Temp(b.TempC, f), format.Volts(b.Volts), format.Watts(b.Watts))
 	} else {
-		fmt.Println("Battery: unavailable")
+		fmt.Fprintln(out, "Battery: unavailable")
 	}
 
 	return nil

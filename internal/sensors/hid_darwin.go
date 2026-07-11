@@ -65,11 +65,17 @@ static int pulse_hid_read(IOHIDServiceClientRef svc, int64_t eventType,
 import "C"
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/emgeorrk/pulse/internal/entity"
+)
+
+const (
+	temperatureUsagePage = 0xff00
+	voltageUsagePage     = 0xff08
+	temperatureUsage     = 5
+	voltageUsage         = 3
 )
 
 // HID reads temperatures and voltages from the HID sensor hub — the Apple
@@ -82,12 +88,13 @@ type HID struct {
 
 func NewHID() (*HID, error) {
 	h := &HID{
-		temp: C.pulse_hid_client(0xff00, 5),
-		volt: C.pulse_hid_client(0xff08, 3),
+		temp: C.pulse_hid_client(temperatureUsagePage, temperatureUsage),
+		volt: C.pulse_hid_client(voltageUsagePage, voltageUsage),
 	}
 	if h.temp == nil && h.volt == nil {
-		return nil, fmt.Errorf("HID event system unavailable")
+		return nil, errHIDUnavailable
 	}
+
 	return h, nil
 }
 
@@ -110,13 +117,15 @@ func (h *HID) Voltages() ([]entity.Reading, error) {
 
 func (h *HID) read(client C.IOHIDEventSystemClientRef, eventType int64, valid func(string, float64) bool) ([]entity.Reading, error) {
 	if client == nil {
-		return nil, fmt.Errorf("HID client not created")
+		return nil, errHIDClient
 	}
+
 	// CF types are uintptr in cgo (pointer-invariance rules), so compare to 0
 	services := C.IOHIDEventSystemClientCopyServices(client)
 	if services == 0 {
-		return nil, fmt.Errorf("no HID services")
+		return nil, errHIDServices
 	}
+
 	defer C.CFRelease(C.CFTypeRef(services))
 
 	n := int(C.CFArrayGetCount(services))
@@ -140,12 +149,13 @@ func (h *HID) read(client C.IOHIDEventSystemClientRef, eventType int64, valid fu
 		cnt[label]++
 	}
 	if len(sum) == 0 {
-		return nil, fmt.Errorf("no readable HID sensors")
+		return nil, errHIDSensors
 	}
 	out := make([]entity.Reading, 0, len(sum))
 	for name, s := range sum {
 		out = append(out, entity.Reading{Name: name, Value: s / float64(cnt[name])})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+
 	return out, nil
 }

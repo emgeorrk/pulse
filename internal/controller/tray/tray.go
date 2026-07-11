@@ -27,7 +27,7 @@ type groupUI struct {
 	rows []*systray.MenuItem // parallel to group.metrics
 }
 
-type Tray struct {
+type Tray struct { //nolint:govet // Field order follows UI lifecycle and state ownership.
 	last         entity.Snapshot
 	store        *config.Store
 	bar          map[entity.MetricID]metric
@@ -43,14 +43,18 @@ type Tray struct {
 
 func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
 	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}, loading: true}
-	for _, g := range buildGroups(hw, caps) {
-		for i, m := range g.metrics {
-			g.metrics[i] = m.fill(g)
+
+	groups := buildGroups(hw, caps)
+	for groupIndex := range groups {
+		g := &groups[groupIndex]
+		for metricIndex := range g.metrics {
+			g.metrics[metricIndex] = g.metrics[metricIndex].fill(*g)
 		}
 
-		t.groups = append(t.groups, groupUI{group: g})
-		for _, m := range g.metrics {
-			t.bar[m.id] = m
+		t.groups = append(t.groups, groupUI{group: *g})
+		for metricIndex := range g.metrics {
+			m := &g.metrics[metricIndex]
+			t.bar[m.id] = *m
 		}
 	}
 
@@ -72,7 +76,7 @@ func (t *Tray) build() {
 	systray.SetTitle(restFrame)
 	systray.SetTooltip("pulse — system monitor")
 
-	for _, key := range icons.Keys {
+	for _, key := range icons.Keys() {
 		systray.RegisterTitleIcon(key, icons.PNG(key))
 	}
 
@@ -82,7 +86,8 @@ func (t *Tray) build() {
 		g := &t.groups[gi]
 
 		g.item = systray.AddMenuItem(g.headerTitle(cfg, ""), "")
-		for _, m := range g.metrics {
+		for metricIndex := range g.metrics {
+			m := &g.metrics[metricIndex]
 			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
 
 			it.KeepMenuOpen() // pinning several metrics in one menu open
@@ -200,7 +205,7 @@ func setTemplateIcon(item *systray.MenuItem, key string) {
 	}
 }
 
-func (t *Tray) buildSettings(cfg config.Config) {
+func (t *Tray) buildSettings(cfg config.Config) { //nolint:funlen,gocognit // Settings construction mirrors the menu hierarchy.
 	s := systray.AddMenuItem(settingsTitle(cfg), "")
 	t.settings = s
 
@@ -210,7 +215,6 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	var intervalItems []*systray.MenuItem
 
 	for _, sec := range intervals {
-
 		label := formatSeconds(sec)
 		it := s.AddSubMenuItemCheckbox("Update: "+label, "", cfg.IntervalSec == sec)
 		it.KeepMenuOpen()
@@ -218,7 +222,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 		intervalItems = append(intervalItems, it)
 		go func(me *systray.MenuItem) {
 			for range me.ClickedCh {
-				t.store.Update(func(c *config.Config) { c.IntervalSec = sec })
+				t.updateConfig(func(c *config.Config) { c.IntervalSec = sec })
 
 				for _, other := range intervalItems {
 					other.Uncheck()
@@ -278,7 +282,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 		for range spark.ClickedCh {
 			var on bool
 
-			t.store.Update(func(c *config.Config) { c.ShowSparkline = !c.ShowSparkline; on = c.ShowSparkline })
+			t.updateConfig(func(c *config.Config) { c.ShowSparkline = !c.ShowSparkline; on = c.ShowSparkline })
 			setChecked(spark, on)
 			t.refresh()
 		}
@@ -292,7 +296,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 		for range login.ClickedCh {
 			var on bool
 
-			t.store.Update(func(c *config.Config) { c.StartAtLogin = !c.StartAtLogin; on = c.StartAtLogin })
+			t.updateConfig(func(c *config.Config) { c.StartAtLogin = !c.StartAtLogin; on = c.StartAtLogin })
 
 			var err error
 			if on {
@@ -302,7 +306,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 			}
 
 			if err != nil { // rollback: couldn't write the LaunchAgent — don't lie with the checkbox
-				t.store.Update(func(c *config.Config) { c.StartAtLogin = !on })
+				t.updateConfig(func(c *config.Config) { c.StartAtLogin = !on })
 
 				on = !on
 			}
@@ -315,10 +319,16 @@ func (t *Tray) buildSettings(cfg config.Config) {
 // watchRadio: clicking me checks it, unchecks other, and applies apply.
 func (t *Tray) watchRadio(me, other *systray.MenuItem, apply func(*config.Config)) {
 	for range me.ClickedCh {
-		t.store.Update(apply)
+		t.updateConfig(apply)
 		me.Check()
 		other.Uncheck()
 		t.refresh()
+	}
+}
+
+func (t *Tray) updateConfig(apply func(*config.Config)) {
+	if err := t.store.Update(apply); err != nil {
+		return // Settings remain updated in memory when persistence fails.
 	}
 }
 
@@ -332,16 +342,23 @@ func (t *Tray) watchPin(id entity.MetricID, item *systray.MenuItem) {
 // The startup heartbeat: a "lub-dub" cycle of monochrome text glyphs
 // (VS15 on the filled heart keeps it from rendering as color emoji).
 // restFrame is also the initial title so the bar is never blank.
-const restFrame = "♡"
+const (
+	restFrame  = "♡"
+	pulseFrame = "♥︎"
+)
 
-var heartbeat = []struct {
+type heartbeatFrame struct {
 	frame string
 	d     time.Duration
-}{
-	{"♥︎", 180 * time.Millisecond}, // lub
-	{restFrame, 120 * time.Millisecond},
-	{"♥︎", 180 * time.Millisecond},      // dub
-	{restFrame, 620 * time.Millisecond}, // diastole
+}
+
+func heartbeatFrames() []heartbeatFrame {
+	return []heartbeatFrame{
+		{pulseFrame, 180 * time.Millisecond}, // lub
+		{restFrame, 120 * time.Millisecond},
+		{pulseFrame, 180 * time.Millisecond}, // dub
+		{restFrame, 620 * time.Millisecond},  // diastole
+	}
 }
 
 // animate beats the heart in the title until the first snapshot arrives.
@@ -349,7 +366,7 @@ var heartbeat = []struct {
 // cut short; render skips the title while loading is set.
 func (t *Tray) animate(ctx context.Context) {
 	for {
-		for _, f := range heartbeat {
+		for _, f := range heartbeatFrames() {
 			systray.SetTitle(f.frame)
 
 			select {
@@ -394,7 +411,7 @@ func (t *Tray) refresh() {
 	}
 }
 
-func (t *Tray) render(s entity.Snapshot) {
+func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are immutable frames shared across render helpers.
 	cfg := t.store.Get()
 	t.mu.Lock()
 	loading := t.loading
@@ -415,7 +432,8 @@ func (t *Tray) render(s entity.Snapshot) {
 			g.item.SetTitle(g.headerTitle(cfg, g.aggregate(s, cfg)))
 		}
 
-		for i, m := range g.metrics {
+		for i := range g.metrics {
+			m := &g.metrics[i]
 			g.rows[i].SetTitle(m.label + ": " + m.menu(s, cfg))
 		}
 	}
@@ -424,7 +442,7 @@ func (t *Tray) render(s entity.Snapshot) {
 // setTitle renders the pinned metrics into the status item. Only the
 // gnome+visual combination needs the attributed-title path; everything
 // else stays a plain string.
-func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) {
+func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) { //nolint:cyclop,gocritic,gocyclo // Title modes are intentionally explicit.
 	var parts []systray.TitlePart
 	if cfg.ShowSparkline && len(s.CPU.History) > 0 {
 		parts = append(parts, systray.TitlePart{Text: format.Sparkline(s.CPU.History)})

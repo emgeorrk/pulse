@@ -40,15 +40,16 @@ func NewMem() (*Mem, error) {
 	}
 	ps := uint64(C.pulse_page_size())
 	if ps == 0 {
-		return nil, fmt.Errorf("host_page_size returned 0")
+		return nil, errPageSize
 	}
+
 	return &Mem{total: total, pageSize: ps}, nil
 }
 
 func (m *Mem) Read() (entity.MemStats, error) {
 	var stat C.vm_statistics64_data_t
 	if kr := C.pulse_vm_stat(&stat); kr != C.KERN_SUCCESS {
-		return entity.MemStats{}, fmt.Errorf("host_statistics64: kern_return_t %d", int(kr))
+		return entity.MemStats{}, fmt.Errorf("%w: kern_return_t %d", errMemoryStats, int(kr))
 	}
 
 	ps := m.pageSize
@@ -77,6 +78,7 @@ func (m *Mem) Read() (entity.MemStats, error) {
 	if total, used, err := readSwap(); err == nil {
 		st.SwapTotal, st.SwapUsed = total, used
 	}
+
 	return st, nil
 }
 
@@ -95,8 +97,10 @@ func readSwap() (total, used uint64, err error) {
 		return 0, 0, fmt.Errorf("sysctl vm.swapusage: %w", err)
 	}
 	if len(buf) < int(unsafe.Sizeof(xswUsage{})) {
-		return 0, 0, fmt.Errorf("vm.swapusage: short read (%d bytes)", len(buf))
+		return 0, 0, fmt.Errorf("%w: %d bytes", errSwapShortRead, len(buf))
 	}
+
 	x := *(*xswUsage)(unsafe.Pointer(&buf[0]))
+
 	return x.Total, x.Used, nil
 }

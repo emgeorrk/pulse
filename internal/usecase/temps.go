@@ -9,10 +9,6 @@ import (
 // HID sensor names differ across chip generations (M1: "pACC MTR Temp
 // Sensor…", newer: "PMU tdie…", Intel SMC: "CPU die"), so we aggregate by
 // substring rather than exact name.
-var (
-	cpuTempMarkers = []string{"tdie", "pacc", "eacc", "soc", "cpu"}
-	gpuTempMarkers = []string{"gpu"}
-)
 
 // AggregateTemps computes CPU/GPU aggregates (average across matching
 // sensors) and the hottest sensor. If nothing matches, the aggregate stays
@@ -31,14 +27,14 @@ func AggregateTemps(all []entity.Reading) entity.TempStats {
 			stats.Hottest = r
 		}
 
-		if matchAny(name, gpuTempMarkers) {
+		if matchAny(name, gpuTemperatureMarkers()) {
 			gpuSum += r.Value
 			gpuN++
 
 			continue // "GPU" must not land in the CPU aggregate via the "soc" marker
 		}
 
-		if matchAny(name, cpuTempMarkers) {
+		if matchAny(name, cpuTemperatureMarkers()) {
 			cpuSum += r.Value
 			cpuN++
 		}
@@ -53,6 +49,14 @@ func AggregateTemps(all []entity.Reading) entity.TempStats {
 	}
 
 	return stats
+}
+
+func cpuTemperatureMarkers() []string {
+	return []string{"tdie", "pacc", "eacc", "soc", "cpu"}
+}
+
+func gpuTemperatureMarkers() []string {
+	return []string{"gpu"}
 }
 
 func matchAny(s string, markers []string) bool {

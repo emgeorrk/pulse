@@ -114,9 +114,14 @@ linters:
           - godot
           - paralleltest
         path: integration-test
+      # nlreturn positions are shifted in these cgo files, so its suggested
+      # blank lines conflict with gofumpt/whitespace at unrelated statements.
+      - linters:
+          - nlreturn
+        path: internal/sensors/.*_darwin\.go
     paths:
       - bin/
-      - third_party$
+      - third_party/
       - builtin$
       - examples$
       - vendor$

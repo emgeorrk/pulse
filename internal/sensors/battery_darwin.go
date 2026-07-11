@@ -54,10 +54,12 @@ static int pulse_battery_read(pulse_batt *b) {
 */
 import "C"
 
-import (
-	"fmt"
+import "github.com/emgeorrk/pulse/internal/entity"
 
-	"github.com/emgeorrk/pulse/internal/entity"
+const (
+	percentDivisor    = 100
+	milliUnitDivisor  = 1000
+	unknownTimeMarker = 0xFFFF
 )
 
 // Batt reads AppleSmartBattery from IORegistry. Desktop Macs have no such
@@ -69,13 +71,13 @@ func NewBattery() *Batt { return &Batt{} }
 func (*Batt) Battery() (entity.BatteryStats, error) {
 	var b C.pulse_batt
 	if C.pulse_battery_read(&b) != 0 {
-		return entity.BatteryStats{}, fmt.Errorf("AppleSmartBattery unavailable")
+		return entity.BatteryStats{}, errBatteryUnavailable
 	}
 
 	st := entity.BatteryStats{
 		Cycles:   int(b.cycleCount),
-		TempC:    float64(b.temperature) / 100, // hundredths of °C
-		Volts:    float64(b.voltage) / 1000,    // mV
+		TempC:    float64(b.temperature) / percentDivisor, // hundredths of °C
+		Volts:    float64(b.voltage) / milliUnitDivisor,   // mV
 		Charging: b.isCharging != 0,
 		External: b.externalConnected != 0,
 	}
@@ -93,11 +95,12 @@ func (*Batt) Battery() (entity.BatteryStats, error) {
 	}
 
 	// mV × mA → W; Amperage is negative while discharging
-	st.Watts = st.Volts * float64(b.amperage) / 1000
+	st.Watts = st.Volts * float64(b.amperage) / milliUnitDivisor
 
 	st.MinutesLeft = int(b.timeRemaining)
-	if b.timeRemaining <= 0 || b.timeRemaining >= 0xFFFF { // 65535 = still being calculated
+	if b.timeRemaining <= 0 || b.timeRemaining >= unknownTimeMarker { // 65535 = still being calculated
 		st.MinutesLeft = -1
 	}
+
 	return st, nil
 }

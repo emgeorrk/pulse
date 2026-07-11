@@ -45,9 +45,9 @@ import (
 // ReadHWInfo determines the chip, Mac model, and macOS version. sysctl
 // errors aren't fatal — missing fields stay empty, and the UI just won't show them.
 func ReadHWInfo() entity.HWInfo {
-	chip, _ := unix.Sysctl("machdep.cpu.brand_string")
-	model, _ := unix.Sysctl("hw.model")
-	osVer, _ := unix.Sysctl("kern.osproductversion")
+	chip := sysctlOrEmpty("machdep.cpu.brand_string")
+	model := sysctlOrEmpty("hw.model")
+	osVer := sysctlOrEmpty("kern.osproductversion")
 
 	chip = strings.TrimSpace(chip)
 	if chip == "" {
@@ -68,4 +68,13 @@ func ReadHWInfo() entity.HWInfo {
 		IsAppleSilicon: strings.Contains(chip, "Apple"),
 		NumCores:       runtime.NumCPU(),
 	}
+}
+
+func sysctlOrEmpty(name string) string {
+	value, err := unix.Sysctl(name)
+	if err != nil {
+		return ""
+	}
+
+	return value
 }

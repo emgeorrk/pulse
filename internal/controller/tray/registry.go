@@ -12,6 +12,28 @@ import (
 	"github.com/emgeorrk/pulse/pkg/format"
 )
 
+const (
+	labelCPU                 = "CPU"
+	labelGPU                 = "GPU"
+	labelUsage               = "Usage"
+	labelUsed                = "Used"
+	labelTotal               = "Total"
+	labelVoltage             = "Voltage"
+	tagCPU                   = "CPU "
+	tagSwap                  = "SW "
+	tagRead                  = "R "
+	tagWrite                 = "W "
+	unavailableTemperature   = "—°"
+	minutesPerHour           = 60
+	metricCPUTotal           = "cpu.total"
+	metricMemoryUsed         = "mem.used"
+	metricMemoryAvailable    = "mem.available"
+	metricSwapUsed           = "swap.used"
+	metricHottestTemperature = "temp.hottest"
+	metricNetworkDownload    = "net.down"
+	metricDiskFree           = "disk.free"
+)
+
 // metric is one row in the dropdown. bar defines a compact value for the
 // menu bar; when bar == nil, the menu value is shown in the bar. What
 // precedes the value there depends on the bar-label style: tag in text
@@ -34,7 +56,7 @@ type metric struct {
 
 // barValue is the compact value for the menu bar; without an explicit bar
 // func, the menu value is used.
-func (m metric) barValue(s entity.Snapshot, c config.Config) string {
+func (m metric) barValue(s entity.Snapshot, c config.Config) string { //nolint:gocritic // Snapshot values are immutable render inputs.
 	if m.bar != nil {
 		return m.bar(s, c)
 	}
@@ -44,7 +66,7 @@ func (m metric) barValue(s entity.Snapshot, c config.Config) string {
 
 // barPart renders the metric for the menu bar per the current settings:
 // an optional icon key (drawn by the systray layer) plus the text.
-func (m metric) barPart(s entity.Snapshot, c config.Config) (iconKey, text string) {
+func (m metric) barPart(s entity.Snapshot, c config.Config) (iconKey, text string) { //nolint:gocritic // Snapshot values are immutable render inputs.
 	val := m.barValue(s, c)
 	if c.BarLabels != config.BarVisual {
 		return "", m.tag + val
@@ -83,26 +105,26 @@ type group struct {
 
 // buildGroups builds the group registry for this hardware: groups
 // unavailable per caps aren't created at all. Group order = dropdown order.
-func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
+func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,funlen,gocognit,gocyclo // Registry construction mirrors capability-driven UI groups.
 	cpu := group{
 		emoji: "⚙️",
 		icon:  icons.CPU,
-		label: "CPU",
+		label: labelCPU,
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			return format.Percent(s.CPU.Total)
 		},
 		metrics: []metric{
 			{
-				id:    "cpu.total",
-				label: "Usage",
-				tag:   "CPU ",
+				id:    metricCPUTotal,
+				label: labelUsage,
+				tag:   tagCPU,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Percent(s.CPU.Total)
 				},
 			},
 		},
 	}
-	if caps.Freq {
+	if caps.Freq { //nolint:nestif // Cluster metrics are built from a capability-specific registry.
 		cpu.metrics = append(cpu.metrics,
 			metric{
 				id:    "cpu.freq",
@@ -167,15 +189,15 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 		metrics: []metric{
 			{
 				id:    "mem.usage",
-				label: "Usage",
+				label: labelUsage,
 				tag:   "MEM ",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Percent(s.Mem.UsedFraction())
 				},
 			},
 			{
-				id:    "mem.used",
-				label: "Used",
+				id:    metricMemoryUsed,
+				label: labelUsed,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.Used, c.DecimalBytes)
 				},
@@ -184,7 +206,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 				},
 			},
 			{
-				id:    "mem.available",
+				id:    metricMemoryAvailable,
 				label: "Available",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.Available, c.DecimalBytes)
@@ -204,10 +226,10 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 				},
 			},
 			{
-				id:    "swap.used",
+				id:    metricSwapUsed,
 				label: "Swap",
-				tag:   "SW ",
-				sym:   "SW ",
+				tag:   tagSwap,
+				sym:   tagSwap,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.SwapUsed, c.DecimalBytes)
 				},
@@ -258,7 +280,7 @@ func gpuGroup() group {
 	return group{
 		emoji: "🎮",
 		icon:  icons.GPU,
-		label: "GPU",
+		label: labelGPU,
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			if s.GPU == nil {
 				return "—"
@@ -269,7 +291,7 @@ func gpuGroup() group {
 		metrics: []metric{
 			{
 				id:    "gpu.usage",
-				label: "Usage",
+				label: labelUsage,
 				tag:   "GPU ",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.GPU == nil {
@@ -308,7 +330,7 @@ func powerGroup() group {
 		metrics: []metric{
 			{
 				id:    "power.total",
-				label: "Total",
+				label: labelTotal,
 				menu:  watts(func(p *entity.PowerStats) float64 { return p.Total }),
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Power == nil {
@@ -318,14 +340,14 @@ func powerGroup() group {
 					return format.Watts(s.Power.Total)
 				},
 			},
-			{id: "power.cpu", label: "CPU", menu: watts(func(p *entity.PowerStats) float64 { return p.CPU })},
-			{id: "power.gpu", label: "GPU", menu: watts(func(p *entity.PowerStats) float64 { return p.GPU })},
+			{id: "power.cpu", label: labelCPU, menu: watts(func(p *entity.PowerStats) float64 { return p.CPU })},
+			{id: "power.gpu", label: labelGPU, menu: watts(func(p *entity.PowerStats) float64 { return p.GPU })},
 			{id: "power.ane", label: "ANE", menu: watts(func(p *entity.PowerStats) float64 { return p.ANE })},
 		},
 	}
 }
 
-func batteryGroup() group {
+func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional battery fields require independent fallbacks.
 	return group{
 		emoji: "🔋",
 		icon:  icons.Battery,
@@ -379,7 +401,7 @@ func batteryGroup() group {
 						return "—"
 					}
 
-					return fmt.Sprintf("%dh %02dm", s.Battery.MinutesLeft/60, s.Battery.MinutesLeft%60)
+					return fmt.Sprintf("%dh %02dm", s.Battery.MinutesLeft/minutesPerHour, s.Battery.MinutesLeft%minutesPerHour)
 				},
 			},
 			{
@@ -428,7 +450,7 @@ func batteryGroup() group {
 			},
 			{
 				id:    "batt.volts",
-				label: "Voltage",
+				label: labelVoltage,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Battery == nil {
 						return "—"
@@ -441,7 +463,7 @@ func batteryGroup() group {
 	}
 }
 
-func tempGroup(sensorNames []string) group {
+func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,gocyclo // Sensor-specific closures provide independent fallbacks.
 	g := group{
 		emoji: "🌡️",
 		icon:  icons.Temperature,
@@ -460,7 +482,7 @@ func tempGroup(sensorNames []string) group {
 		metrics: []metric{
 			{
 				id:    "temp.cpu",
-				label: "CPU",
+				label: labelCPU,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.CPU == 0 {
 						return "—"
@@ -470,7 +492,7 @@ func tempGroup(sensorNames []string) group {
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.CPU == 0 {
-						return "—°"
+						return unavailableTemperature
 					}
 
 					return format.TempShort(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
@@ -478,7 +500,7 @@ func tempGroup(sensorNames []string) group {
 			},
 			{
 				id:    "temp.gpu",
-				label: "GPU",
+				label: labelGPU,
 				tag:   "G",
 				sym:   "G",
 				menu: func(s entity.Snapshot, c config.Config) string {
@@ -490,14 +512,14 @@ func tempGroup(sensorNames []string) group {
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.GPU == 0 {
-						return "—°"
+						return unavailableTemperature
 					}
 
 					return format.TempShort(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
 				},
 			},
 			{
-				id:    "temp.hottest",
+				id:    metricHottestTemperature,
 				label: "Hottest",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.Hottest.Name == "" {
@@ -509,7 +531,7 @@ func tempGroup(sensorNames []string) group {
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.Hottest.Name == "" {
-						return "—°"
+						return unavailableTemperature
 					}
 
 					return format.TempShort(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
@@ -539,20 +561,20 @@ func tempGroup(sensorNames []string) group {
 	return g
 }
 
-func fanGroup(count int) group {
+func fanGroup(count int) group { //nolint:gocognit // Each fan metric formats current and rated speeds independently.
 	g := group{
 		emoji: "🌀",
 		icon:  icons.Fan,
 		label: "Fans",
 		aggregate: func(s entity.Snapshot, c config.Config) string {
-			max := 0.0
+			maxRPM := 0.0
 			for _, f := range s.Fans {
-				if f.RPM > max {
-					max = f.RPM
+				if f.RPM > maxRPM {
+					maxRPM = f.RPM
 				}
 			}
 
-			return format.RPM(max)
+			return format.RPM(maxRPM)
 		},
 	}
 
@@ -590,7 +612,7 @@ func voltGroup(sensorNames []string) group {
 	g := group{
 		emoji: "⚡",
 		icon:  icons.Voltage,
-		label: "Voltage",
+		label: labelVoltage,
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			if len(s.Volts) == 0 {
 				return "—"
@@ -619,7 +641,7 @@ func voltGroup(sensorNames []string) group {
 	return g
 }
 
-func netGroup(ifaces []string) group {
+func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo // Network metrics share explicit nil-safe formatters.
 	g := group{
 		emoji: "📶",
 		icon:  icons.Network,
@@ -633,7 +655,7 @@ func netGroup(ifaces []string) group {
 		},
 		metrics: []metric{
 			{
-				id:    "net.down",
+				id:    metricNetworkDownload,
 				label: "Download",
 				tag:   "↓",
 				sym:   "↓",
@@ -740,7 +762,7 @@ func netGroup(ifaces []string) group {
 	return g
 }
 
-func diskGroup() group {
+func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics share explicit nil-safe formatters.
 	return group{
 		emoji: "💽",
 		icon:  icons.Storage,
@@ -755,7 +777,7 @@ func diskGroup() group {
 		metrics: []metric{
 			{
 				id:    "disk.usage",
-				label: "Usage",
+				label: labelUsage,
 				tag:   "DSK ",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
@@ -767,7 +789,7 @@ func diskGroup() group {
 			},
 			{
 				id:    "disk.used",
-				label: "Used",
+				label: labelUsed,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
@@ -784,7 +806,7 @@ func diskGroup() group {
 				},
 			},
 			{
-				id:    "disk.free",
+				id:    metricDiskFree,
 				label: "Free",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
@@ -803,7 +825,7 @@ func diskGroup() group {
 			},
 			{
 				id:    "disk.total",
-				label: "Total",
+				label: labelTotal,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
@@ -822,8 +844,8 @@ func diskGroup() group {
 			{
 				id:    "disk.read",
 				label: "Read rate",
-				tag:   "R ",
-				sym:   "R ",
+				tag:   tagRead,
+				sym:   tagRead,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
@@ -842,8 +864,8 @@ func diskGroup() group {
 			{
 				id:    "disk.write",
 				label: "Write rate",
-				tag:   "W ",
-				sym:   "W ",
+				tag:   tagWrite,
+				sym:   tagWrite,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
@@ -862,8 +884,8 @@ func diskGroup() group {
 			{
 				id:    "disk.read.total",
 				label: "Read total (boot)",
-				tag:   "R ",
-				sym:   "R ",
+				tag:   tagRead,
+				sym:   tagRead,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
@@ -882,8 +904,8 @@ func diskGroup() group {
 			{
 				id:    "disk.write.total",
 				label: "Write total (boot)",
-				tag:   "W ",
-				sym:   "W ",
+				tag:   tagWrite,
+				sym:   tagWrite,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"

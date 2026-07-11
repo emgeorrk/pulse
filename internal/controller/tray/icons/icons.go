@@ -27,11 +27,13 @@ const (
 	Settings        = "settings" // SF Symbol, not from the Vitals set
 )
 
-// Keys lists every embedded icon key.
-var Keys = []string{
-	CPU, Memory, Temperature, Fan, Voltage,
-	Network, NetworkDownload, NetworkUpload,
-	Storage, Battery, GPU, System, Settings,
+// Keys returns every embedded icon key.
+func Keys() []string {
+	return []string{
+		CPU, Memory, Temperature, Fan, Voltage,
+		Network, NetworkDownload, NetworkUpload,
+		Storage, Battery, GPU, System, Settings,
+	}
 }
 
 // PNG returns the embedded template PNG for key, or nil if the key is

@@ -15,7 +15,7 @@ import (
 const historyLen = 8
 
 type Monitor struct {
-	src       sensors.Sources
+	src       *sensors.Sources
 	lastTick  time.Time
 	store     *config.Store
 	prevNet   map[string]entity.NetCounters
@@ -28,7 +28,7 @@ type Monitor struct {
 	haveDisk  bool
 }
 
-func NewMonitor(src sensors.Sources, store *config.Store) *Monitor {
+func NewMonitor(src *sensors.Sources, store *config.Store) *Monitor {
 	return &Monitor{src: src, store: store}
 }
 
@@ -75,7 +75,10 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 
 // prime takes the first counter readings — the baseline for deltas.
 func (m *Monitor) prime() {
-	m.prevTicks, _ = m.src.CPU.Ticks()
+	if ticks, err := m.src.CPU.Ticks(); err == nil {
+		m.prevTicks = ticks
+	}
+
 	if m.src.Net != nil {
 		if counters, err := m.src.Net.Counters(); err == nil {
 			m.prevNet = countersMap(counters)
@@ -93,7 +96,7 @@ func (m *Monitor) prime() {
 }
 
 // sample takes one frame of all available metrics.
-func (m *Monitor) sample() entity.Snapshot {
+func (m *Monitor) sample() entity.Snapshot { //nolint:cyclop,funlen,gocognit,gocyclo // Each optional source is sampled independently by design.
 	now := time.Now()
 	dwell := now.Sub(m.lastTick).Seconds()
 	m.lastTick = now

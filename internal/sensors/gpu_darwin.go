@@ -42,11 +42,7 @@ static int pulse_gpu_util(double *util) {
 */
 import "C"
 
-import (
-	"fmt"
-
-	"github.com/emgeorrk/pulse/internal/entity"
-)
+import "github.com/emgeorrk/pulse/internal/entity"
 
 // GPUSensor reads GPU utilization from IOAccelerator PerformanceStatistics.
 type GPUSensor struct{}
@@ -56,7 +52,7 @@ func NewGPU() *GPUSensor { return &GPUSensor{} }
 func (*GPUSensor) GPU() (entity.GPUStats, error) {
 	var util C.double
 	if C.pulse_gpu_util(&util) != 0 {
-		return entity.GPUStats{}, fmt.Errorf("IOAccelerator statistics unavailable")
+		return entity.GPUStats{}, errGPUStats
 	}
 	u := float64(util)
 	if u < 0 {
@@ -65,5 +61,6 @@ func (*GPUSensor) GPU() (entity.GPUStats, error) {
 	if u > 1 {
 		u = 1
 	}
+
 	return entity.GPUStats{Utilization: u}, nil
 }

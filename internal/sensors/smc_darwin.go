@@ -125,20 +125,32 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
+const (
+	maxFans         = 8
+	maxTemperatureC = 125
+	threeByteShift  = 24
+	twoByteShift    = 16
+	oneByteShift    = 8
+	cpuProximityKey = "TC0P"
+	palmRestKey     = "Ts0P"
+	intelGPUKey     = "TG0D"
+)
+
 // SMC is an AppleSMC client (works on both Intel and Apple Silicon).
 // Here: fans (both platforms), temperatures (the Intel path), and the
 // Apple Silicon GPU temperature keys (Tg*).
 type SMC struct {
-	conn    C.io_connect_t
-	gpuOnce sync.Once
 	gpuKeys []string // discovered Apple Silicon "Tg*" GPU temperature keys
+	gpuOnce sync.Once
+	conn    C.io_connect_t
 }
 
 func NewSMC() (*SMC, error) {
 	s := &SMC{}
 	if C.pulse_smc_open(&s.conn) != 0 {
-		return nil, fmt.Errorf("AppleSMC service unavailable")
+		return nil, errSMCUnavailable
 	}
+
 	return s, nil
 }
 
@@ -148,20 +160,22 @@ func (s *SMC) Close() {
 
 // ReadKey reads and decodes a single SMC key ("FNum", "F0Ac", "TC0P", …).
 func (s *SMC) ReadKey(key string) (float64, error) {
-	if len(key) != 4 {
-		return 0, fmt.Errorf("SMC key must be 4 chars: %q", key)
+	if len(key) != smcKeySize {
+		return 0, fmt.Errorf("%w: %q", errSMCKeyLength, key)
 	}
 	var (
 		dataType C.uint32_t
 		dataSize C.uint32_t
 		buf      [32]C.uint8_t
 	)
-	k := C.uint32_t(key[0])<<24 | C.uint32_t(key[1])<<16 | C.uint32_t(key[2])<<8 | C.uint32_t(key[3])
+	k := C.uint32_t(key[0])<<threeByteShift | C.uint32_t(key[1])<<twoByteShift |
+		C.uint32_t(key[2])<<oneByteShift | C.uint32_t(key[3])
 	if rc := C.pulse_smc_read(s.conn, k, &dataType, &dataSize, &buf[0]); rc != 0 {
-		return 0, fmt.Errorf("SMC read %q: rc=%d", key, int(rc))
+		return 0, fmt.Errorf("%w %q: rc=%d", errSMCRead, key, int(rc))
 	}
 	typ := string([]byte{
-		byte(dataType >> 24), byte(dataType >> 16), byte(dataType >> 8), byte(dataType),
+		byte(dataType >> threeByteShift), byte(dataType >> twoByteShift),
+		byte(dataType >> oneByteShift), byte(dataType),
 	})
 	b := make([]byte, dataSize)
 	for i := range b {
@@ -173,7 +187,7 @@ func (s *SMC) ReadKey(key string) (float64, error) {
 // FanCount returns the number of fans (0 on fanless models).
 func (s *SMC) FanCount() int {
 	n, err := s.ReadKey("FNum")
-	if err != nil || n < 0 || n > 8 {
+	if err != nil || n < 0 || n > maxFans {
 		return 0
 	}
 	return int(n)
@@ -183,7 +197,7 @@ func (s *SMC) FanCount() int {
 func (s *SMC) Fans() ([]entity.Fan, error) {
 	count := s.FanCount()
 	if count == 0 {
-		return nil, fmt.Errorf("no fans")
+		return nil, errNoFans
 	}
 	fans := make([]entity.Fan, 0, count)
 	for i := 0; i < count; i++ {
@@ -192,48 +206,61 @@ func (s *SMC) Fans() ([]entity.Fan, error) {
 			continue
 		}
 		f := entity.Fan{Name: fmt.Sprintf("Fan %d", i+1), RPM: rpm}
-		f.Min, _ = s.ReadKey(fmt.Sprintf("F%dMn", i))
-		f.Max, _ = s.ReadKey(fmt.Sprintf("F%dMx", i))
+		f.Min = s.readKeyOrZero(fmt.Sprintf("F%dMn", i))
+		f.Max = s.readKeyOrZero(fmt.Sprintf("F%dMx", i))
 		fans = append(fans, f)
 	}
 	if len(fans) == 0 {
-		return nil, fmt.Errorf("fan keys unreadable")
+		return nil, errFanKeys
 	}
+
 	return fans, nil
 }
 
-// intelTempKeys is a curated list of temperature SMC keys for Intel Macs
+func (s *SMC) readKeyOrZero(key string) float64 {
+	value, err := s.ReadKey(key)
+	if err != nil {
+		return 0
+	}
+
+	return value
+}
+
+// intelTemperatureKeys returns a curated list of temperature SMC keys for Intel Macs
 // (VirtualSMC Docs/SMCSensorKeys.txt). WARNING: this path has not been
 // verified on real Intel hardware (the dev machine is Apple Silicon).
-var intelTempKeys = []struct{ key, label string }{
-	{"TC0P", "CPU proximity"},
-	{"TC0D", "CPU die"},
-	{"TC0E", "CPU die (PECI)"},
-	{"TC0F", "CPU die (filtered)"},
-	{"TG0P", "GPU proximity"},
-	{"TG0D", "GPU die"},
-	{"TM0P", "Memory proximity"},
-	{"TB0T", "Battery"},
-	{"Ts0P", "Palm rest"},
-	{"TA0P", "Ambient"},
-	{"TH0P", "Drive bay"},
-	{"TW0P", "Airport"},
+func intelTemperatureKeys() []struct{ key, label string } {
+	return []struct{ key, label string }{
+		{cpuProximityKey, "CPU proximity"},
+		{"TC0D", "CPU die"},
+		{"TC0E", "CPU die (PECI)"},
+		{"TC0F", "CPU die (filtered)"},
+		{"TG0P", "GPU proximity"},
+		{intelGPUKey, gpuTempSensorName},
+		{"TM0P", "Memory proximity"},
+		{"TB0T", "Battery"},
+		{palmRestKey, "Palm rest"},
+		{"TA0P", "Ambient"},
+		{"TH0P", "Drive bay"},
+		{"TW0P", "Airport"},
+	}
 }
 
 // Temps is the Intel temperature path via SMC keys; on Apple Silicon HID is
 // used instead (richer and more accurate), so this isn't called there.
 func (s *SMC) Temps() ([]entity.Reading, error) {
 	var out []entity.Reading
-	for _, k := range intelTempKeys {
+	for _, k := range intelTemperatureKeys() {
 		v, err := s.ReadKey(k.key)
-		if err != nil || v <= 0 || v > 125 {
+		if err != nil || v <= 0 || v > maxTemperatureC {
 			continue // key doesn't exist on this model, or garbage value — skip
 		}
 		out = append(out, entity.Reading{Name: k.label, Value: v})
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("no readable temperature keys")
+		return nil, errTemperatureKeys
 	}
+
 	return out, nil
 }
 
@@ -250,8 +277,9 @@ func (s *SMC) keyCount() (int, error) {
 func (s *SMC) keyAtIndex(i int) (string, error) {
 	var key C.uint32_t
 	if rc := C.pulse_smc_key_at_index(s.conn, C.uint32_t(i), &key); rc != 0 {
-		return "", fmt.Errorf("SMC key at index %d: rc=%d", i, int(rc))
+		return "", fmt.Errorf("%w at index %d: rc=%d", errSMCKeyIndex, i, int(rc))
 	}
+
 	return smcKeyString(uint32(key)), nil
 }
 
@@ -268,7 +296,7 @@ func (s *SMC) discoverGPUTempKeys() {
 		if err != nil || !isGPUTempKey(key) {
 			continue
 		}
-		if _, err := s.ReadKey(key); err != nil {
+		if _, err := s.ReadKey(key); err != nil { //nolint:gocritic // The inline error is checked immediately.
 			continue
 		}
 		s.gpuKeys = append(s.gpuKeys, key)
@@ -292,7 +320,7 @@ func (s *SMC) GPUTempSensors() []string {
 func (s *SMC) GPUTemps() ([]entity.Reading, error) {
 	s.gpuOnce.Do(s.discoverGPUTempKeys)
 	if len(s.gpuKeys) == 0 {
-		return nil, fmt.Errorf("no GPU temperature keys")
+		return nil, errGPUTemperatureKeys
 	}
 	var (
 		sum float64
@@ -300,7 +328,7 @@ func (s *SMC) GPUTemps() ([]entity.Reading, error) {
 	)
 	for _, key := range s.gpuKeys {
 		v, err := s.ReadKey(key)
-		if err != nil || v <= 0 || v > 125 {
+		if err != nil || v <= 0 || v > maxTemperatureC {
 			continue
 		}
 		sum += v

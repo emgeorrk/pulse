@@ -164,8 +164,15 @@ import (
 )
 
 const (
-	maxEnergyChannels = 32
-	maxStateChannels  = 16
+	maxEnergyChannels     = 32
+	maxStateChannels      = 16
+	nanojoulesPerJoule    = 1e9
+	microjoulesPerJoule   = 1e6
+	millijoulesPerJoule   = 1e3
+	deviceTreeBufferBytes = 1024
+	frequencyEntryBytes   = 8
+	minimumFrequencyHz    = 1e8
+	frequencyUnitScale    = 1000
 )
 
 // IOReport returns CPU/GPU/ANE power (Energy Model group) and CPU frequency
@@ -185,12 +192,12 @@ type IOReport struct {
 
 func NewIOReport() (*IOReport, error) {
 	r := &IOReport{}
-	r.sub = C.pulse_ioreport_open(C.CString("Energy Model"), nil, &r.subbed)
+	r.sub = C.pulse_ioreport_open(C.CString("Energy Model"), nil, &r.subbed) //nolint:gocritic // cgo pointers confuse dupSubExpr.
 	if r.sub == nil {
-		return nil, fmt.Errorf("IOReport Energy Model unavailable")
+		return nil, errIOReport
 	}
 	// first read establishes the baseline
-	if _, err := r.Power(); err != nil {
+	if _, err := r.Power(); err != nil { //nolint:gocritic // The inline error is checked immediately.
 		return nil, err
 	}
 
@@ -199,13 +206,20 @@ func NewIOReport() (*IOReport, error) {
 	r.tables = readFreqTables()
 	if len(r.tables) > 0 {
 		r.fsub = C.pulse_ioreport_open(C.CString("CPU Stats"),
-			C.CString("CPU Complex Performance States"), &r.fsubbed)
+			C.CString("CPU Complex Performance States"), &r.fsubbed) //nolint:gocritic // cgo pointers confuse dupSubExpr.
 		if r.fsub != nil {
 			r.prevRes = map[string][]uint64{}
-			r.Frequency() // establishes the baseline
+			r.primeFrequency()
 		}
 	}
+
 	return r, nil
+}
+
+func (r *IOReport) primeFrequency() {
+	if _, err := r.Frequency(); err != nil { //nolint:gocritic // The baseline error is intentionally consumed.
+		return // The first call only establishes residency baselines.
+	}
 }
 
 // FreqClusters returns the cluster channel names frequency is computed
@@ -216,17 +230,18 @@ func (r *IOReport) FreqClusters() []string {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+
 	return names
 }
 
 // HasFreq reports whether CPU frequency is available on this hardware.
 func (r *IOReport) HasFreq() bool { return r.fsub != nil }
 
-func (r *IOReport) Power() (entity.PowerStats, error) {
+func (r *IOReport) Power() (entity.PowerStats, error) { //nolint:cyclop,gocyclo // Channel names require an explicit classification table.
 	var buf [maxEnergyChannels]C.pulse_energy
 	n := int(C.pulse_ioreport_read(r.sub, r.subbed, &buf[0], maxEnergyChannels))
 	if n < 0 {
-		return entity.PowerStats{}, fmt.Errorf("IOReport sampling failed")
+		return entity.PowerStats{}, errIOReportSample
 	}
 
 	now := time.Now()
@@ -270,6 +285,7 @@ func (r *IOReport) Power() (entity.PowerStats, error) {
 
 	r.prev = cur
 	r.prevT = now
+
 	return stats, nil
 }
 
@@ -277,11 +293,11 @@ func (r *IOReport) Power() (entity.PowerStats, error) {
 func joulesDivisor(unit string) float64 {
 	switch strings.TrimSpace(unit) {
 	case "nJ":
-		return 1e9
+		return nanojoulesPerJoule
 	case "uJ", "µJ":
-		return 1e6
+		return microjoulesPerJoule
 	case "mJ":
-		return 1e3
+		return millijoulesPerJoule
 	default:
 		return 1 // J
 	}
@@ -290,14 +306,14 @@ func joulesDivisor(unit string) float64 {
 // Frequency returns the residency-weighted frequency per cluster channel
 // (MCPU0/MCPU1/PCPU on M5 Pro, ECPU/PCPU on M1) since the last call.
 // The frequency table is chosen by the channel's number of active states.
-func (r *IOReport) Frequency() (entity.FreqStats, error) {
+func (r *IOReport) Frequency() (entity.FreqStats, error) { //nolint:cyclop,gocognit,gocyclo // Residency parsing mirrors IOReport's nested channel/state format.
 	if r.fsub == nil {
-		return entity.FreqStats{}, fmt.Errorf("perf states unavailable")
+		return entity.FreqStats{}, errPerfStates
 	}
 	var buf [maxStateChannels]C.pulse_states
 	n := int(C.pulse_ioreport_read_states(r.fsub, r.fsubbed, &buf[0], maxStateChannels))
 	if n < 0 {
-		return entity.FreqStats{}, fmt.Errorf("perf states sampling failed")
+		return entity.FreqStats{}, errPerfStatesSample
 	}
 
 	var stats entity.FreqStats
@@ -346,8 +362,9 @@ func (r *IOReport) Frequency() (entity.FreqStats, error) {
 		}
 	}
 	if len(stats.Clusters) == 0 {
-		return stats, fmt.Errorf("no active cluster residency yet")
+		return stats, errClusterResidency
 	}
+
 	return stats, nil
 }
 
@@ -398,25 +415,25 @@ func readFreqTables() [][]float64 {
 }
 
 func readFreqTable(prop string) []float64 {
-	var buf [1024]C.uchar
+	var buf [deviceTreeBufferBytes]C.uchar
 	cpath := C.CString("IODeviceTree:/arm-io/pmgr")
 	cprop := C.CString(prop)
-	n := int(C.pulse_devicetree_bytes(cpath, cprop, &buf[0], 1024))
+	n := int(C.pulse_devicetree_bytes(cpath, cprop, &buf[0], deviceTreeBufferBytes))
 	C.free(unsafe.Pointer(cpath))
 	C.free(unsafe.Pointer(cprop))
-	if n < 8 {
+	if n < frequencyEntryBytes {
 		return nil
 	}
 	var freqs []float64
-	for off := 0; off+8 <= n; off += 8 {
+	for off := 0; off+frequencyEntryBytes <= n; off += frequencyEntryBytes {
 		hz := float64(uint32(buf[off]) | uint32(buf[off+1])<<8 |
 			uint32(buf[off+2])<<16 | uint32(buf[off+3])<<24)
 		if hz <= 1 { // placeholder 1s in some tables aren't real frequencies
 			continue
 		}
 		// units depend on the chip: Hz (M1) or kHz (M5) — normalize to Hz
-		for hz < 1e8 {
-			hz *= 1000
+		for hz < minimumFrequencyHz {
+			hz *= frequencyUnitScale
 		}
 		freqs = append(freqs, hz)
 	}

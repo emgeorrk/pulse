@@ -14,6 +14,12 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
+const (
+	defaultIntervalSeconds = 2
+	directoryMode          = 0o755
+	privateFileMode        = 0o600
+)
+
 type TempUnit string
 
 const (
@@ -52,7 +58,7 @@ type Config struct {
 
 func defaults() Config {
 	return Config{
-		IntervalSec:   2,
+		IntervalSec:   defaultIntervalSeconds,
 		TempUnit:      Celsius,
 		DecimalBytes:  false,
 		Pinned:        []entity.MetricID{"cpu.total", "mem.used"},
@@ -64,7 +70,7 @@ func defaults() Config {
 
 func (c Config) Interval() time.Duration {
 	if c.IntervalSec < 1 {
-		return 2 * time.Second
+		return defaultIntervalSeconds * time.Second
 	}
 
 	return time.Duration(c.IntervalSec) * time.Second
@@ -83,8 +89,8 @@ func (c Config) IsPinned(id entity.MetricID) bool {
 // Store provides thread-safe access to settings; every change is saved to
 // disk immediately.
 type Store struct {
-	c    Config
 	path string
+	c    Config
 	mu   sync.Mutex
 }
 
@@ -159,7 +165,7 @@ func (s *Store) Update(fn func(*Config)) error {
 func (s *Store) TogglePin(id entity.MetricID) bool {
 	pinned := false
 
-	s.Update(func(c *Config) {
+	s.Update(func(c *Config) { //nolint:errcheck // Persistence failures are intentionally non-fatal.
 		for i, p := range c.Pinned {
 			if p == id {
 				c.Pinned = append(c.Pinned[:i], c.Pinned[i+1:]...)
@@ -185,12 +191,12 @@ func (s *Store) save() error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), directoryMode); err != nil {
 		return err
 	}
 
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, privateFileMode); err != nil {
 		return err
 	}
 

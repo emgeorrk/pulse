@@ -42,8 +42,9 @@ func (*CPU) Ticks() ([]entity.CoreTicks, error) {
 		info *C.processor_cpu_load_info_data_t
 		cnt  C.mach_msg_type_number_t
 	)
-	if kr := C.pulse_cpu_load(&ncpu, &info, &cnt); kr != C.KERN_SUCCESS {
-		return nil, fmt.Errorf("host_processor_info: kern_return_t %d", int(kr))
+
+	if kr := C.pulse_cpu_load(&ncpu, &info, &cnt); kr != C.KERN_SUCCESS { //nolint:gocritic // cgo constants confuse dupSubExpr.
+		return nil, fmt.Errorf("%w: kern_return_t %d", errCPUInfo, int(kr))
 	}
 	defer C.pulse_cpu_load_free(info, cnt)
 
@@ -57,5 +58,6 @@ func (*CPU) Ticks() ([]entity.CoreTicks, error) {
 			Nice:   uint32(ci.cpu_ticks[C.CPU_STATE_NICE]),
 		}
 	}
+
 	return out, nil
 }
