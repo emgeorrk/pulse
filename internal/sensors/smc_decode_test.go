@@ -17,7 +17,7 @@ func TestDecodeSMC(t *testing.T) {
 		{"fpe2", []byte{0x1c, 0xe8}, 1850},
 		// Intel temp: sp78 — 0x3A80 / 256 = 58.5°C
 		{"sp78", []byte{0x3a, 0x80}, 58.5},
-		// отрицательная температура в sp78
+		// negative temperature in sp78
 		{"sp78", []byte{0xff, 0x00}, -1},
 		{"ui8 ", []byte{2}, 2},
 		{"ui16", []byte{0x01, 0x00}, 256},

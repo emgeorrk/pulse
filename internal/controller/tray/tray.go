@@ -1,8 +1,9 @@
 //go:build darwin
 
-// Package tray — menu bar UI на fyne.io/systray по модели Vitals: пиннутые
-// метрики инлайн в title, полный список в дропдауне по группам, пиннинг
-// кликом-чекбоксом, настройки в подменю Settings.
+// Package tray is the menu bar UI built on fyne.io/systray, modeled on
+// Vitals: pinned metrics show inline in the title, the full list is in the
+// dropdown grouped by category, pinning is a checkbox click, and settings
+// live in the Settings submenu.
 package tray
 
 import (
@@ -22,7 +23,7 @@ import (
 type groupUI struct {
 	group
 	item *systray.MenuItem
-	rows []*systray.MenuItem // параллелен group.metrics
+	rows []*systray.MenuItem // parallel to group.metrics
 }
 
 type Tray struct {
@@ -30,11 +31,11 @@ type Tray struct {
 	hw    entity.HWInfo
 
 	groups []groupUI
-	bar    map[entity.MetricID]metric // метрики по id для рендера в menu bar
+	bar    map[entity.MetricID]metric // metrics by id, for rendering in the menu bar
 
 	mu   sync.Mutex
 	last entity.Snapshot
-	seen bool // получен ли хоть один кадр
+	seen bool // whether at least one frame has been received
 }
 
 func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
@@ -48,8 +49,8 @@ func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
 	return t
 }
 
-// Run блокирует до выхода из приложения. systray.Run обязан выполняться на
-// главной горутине (Cocoa main thread); start вызывается уже из onReady.
+// Run blocks until the app quits. systray.Run must run on the main
+// goroutine (the Cocoa main thread); start is called from onReady.
 func (t *Tray) Run(start func(ctx context.Context) <-chan entity.Snapshot) {
 	ctx, cancel := context.WithCancel(context.Background())
 	systray.Run(func() {
@@ -69,7 +70,7 @@ func (t *Tray) build() {
 		g.item = systray.AddMenuItem(g.emoji+" "+g.label, "")
 		for _, m := range g.metrics {
 			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
-			it.KeepMenuOpen() // пиннинг нескольких метрик за одно открытие меню
+			it.KeepMenuOpen() // pinning several metrics in one menu open
 			go t.watchPin(m.id, it)
 			g.rows = append(g.rows, it)
 		}
@@ -101,7 +102,7 @@ func (t *Tray) build() {
 func (t *Tray) buildSettings(cfg config.Config) {
 	s := systray.AddMenuItem("🛠️ Settings", "")
 
-	// интервал обновления — радиогруппа
+	// update interval — radio group
 	intervals := []int{1, 2, 3, 5}
 	var intervalItems []*systray.MenuItem
 	for _, sec := range intervals {
@@ -121,7 +122,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 		}(it)
 	}
 
-	// единицы температуры — радиогруппа (актуально с этапа температур)
+	// temperature unit — radio group (relevant since the temps feature)
 	tempC := s.AddSubMenuItemCheckbox("Temperature: °C", "", cfg.TempUnit == config.Celsius)
 	tempF := s.AddSubMenuItemCheckbox("Temperature: °F", "", cfg.TempUnit == config.Fahrenheit)
 	tempC.KeepMenuOpen()
@@ -129,7 +130,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	go t.watchRadio(tempC, tempF, func(c *config.Config) { c.TempUnit = config.Celsius })
 	go t.watchRadio(tempF, tempC, func(c *config.Config) { c.TempUnit = config.Fahrenheit })
 
-	// единицы памяти — радиогруппа
+	// memory unit — radio group
 	binU := s.AddSubMenuItemCheckbox("Memory: GiB (binary)", "", !cfg.DecimalBytes)
 	decU := s.AddSubMenuItemCheckbox("Memory: GB (decimal)", "", cfg.DecimalBytes)
 	binU.KeepMenuOpen()
@@ -137,7 +138,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	go t.watchRadio(binU, decU, func(c *config.Config) { c.DecimalBytes = false })
 	go t.watchRadio(decU, binU, func(c *config.Config) { c.DecimalBytes = true })
 
-	// спарклайн CPU в menu bar
+	// CPU sparkline in the menu bar
 	spark := s.AddSubMenuItemCheckbox("CPU sparkline in bar", "", cfg.ShowSparkline)
 	spark.KeepMenuOpen()
 	go func() {
@@ -149,7 +150,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 		}
 	}()
 
-	// автозапуск при логине
+	// start at login
 	login := s.AddSubMenuItemCheckbox("Start at login", "", cfg.StartAtLogin)
 	login.KeepMenuOpen()
 	go func() {
@@ -162,7 +163,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 			} else {
 				err = autostart.Disable()
 			}
-			if err != nil { // откат: не смогли записать LaunchAgent — не врём чекбоксом
+			if err != nil { // rollback: couldn't write the LaunchAgent — don't lie with the checkbox
 				t.store.Update(func(c *config.Config) { c.StartAtLogin = !on })
 				on = !on
 			}
@@ -171,7 +172,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	}()
 }
 
-// watchRadio: клик по me включает его, выключает other и применяет apply.
+// watchRadio: clicking me checks it, unchecks other, and applies apply.
 func (t *Tray) watchRadio(me, other *systray.MenuItem, apply func(*config.Config)) {
 	for range me.ClickedCh {
 		t.store.Update(apply)
@@ -198,8 +199,8 @@ func (t *Tray) consume(ch <-chan entity.Snapshot) {
 	}
 }
 
-// refresh перерисовывает UI по последнему кадру — для мгновенной реакции на
-// пиннинг/настройки, не дожидаясь следующего тика.
+// refresh redraws the UI from the last frame — for an instant reaction to
+// pinning/settings changes, without waiting for the next tick.
 func (t *Tray) refresh() {
 	t.mu.Lock()
 	snap, ok := t.last, t.seen
@@ -252,8 +253,9 @@ func formatSeconds(sec int) string {
 	return fmt.Sprintf("%d s", sec)
 }
 
-// prettyModel убирает из product-name скобки и дубль чипа — он уже показан
-// отдельной строкой: "MacBook Pro (16-inch, M5 Pro)" → "MacBook Pro 16-inch".
+// prettyModel strips the parentheses and the duplicate chip name from
+// product-name — it's already shown on its own line: "MacBook Pro
+// (16-inch, M5 Pro)" → "MacBook Pro 16-inch".
 func prettyModel(name, chip string) string {
 	base, rest, ok := strings.Cut(name, "(")
 	if !ok {

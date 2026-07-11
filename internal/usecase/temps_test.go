@@ -18,7 +18,7 @@ func TestAggregateTemps(t *testing.T) {
 	got := AggregateTemps(all)
 
 	if !almostEqual(got.CPU, 55) {
-		t.Errorf("CPU = %v, want 55 (среднее tdie0+tdie1)", got.CPU)
+		t.Errorf("CPU = %v, want 55 (average of tdie0+tdie1)", got.CPU)
 	}
 	if !almostEqual(got.GPU, 45) {
 		t.Errorf("GPU = %v, want 45", got.GPU)
@@ -31,7 +31,7 @@ func TestAggregateTemps(t *testing.T) {
 func TestAggregateTempsNoMatches(t *testing.T) {
 	got := AggregateTemps([]entity.Reading{{Name: "NAND CH0 temp", Value: 40}})
 	if got.CPU != 0 || got.GPU != 0 {
-		t.Errorf("агрегаты должны остаться 0: %+v", got)
+		t.Errorf("aggregates should stay 0: %+v", got)
 	}
 	if got.Hottest.Value != 40 {
 		t.Errorf("Hottest = %+v", got.Hottest)
@@ -39,7 +39,7 @@ func TestAggregateTempsNoMatches(t *testing.T) {
 }
 
 func TestAggregateTempsIntelLabels(t *testing.T) {
-	// Intel-путь: метки из курируемого списка SMC-ключей
+	// Intel path: labels from the curated SMC key list
 	got := AggregateTemps([]entity.Reading{
 		{Name: "CPU proximity", Value: 58},
 		{Name: "GPU proximity", Value: 52},

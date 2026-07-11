@@ -1,4 +1,4 @@
-# артефакты сборки (bin/pulse, bin/Pulse.app)
+# build artifacts (bin/pulse, bin/Pulse.app)
 bin/
 
 # IDE

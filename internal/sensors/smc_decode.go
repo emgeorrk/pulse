@@ -6,9 +6,9 @@ import (
 	"math"
 )
 
-// decodeSMC переводит сырые байты SMC-ключа в число по fourcc-типу данных.
-// Intel-SMC отдаёт big-endian форматы с фиксированной точкой (fpe2, sp78),
-// Apple Silicon — little-endian IEEE-754 float ("flt ").
+// decodeSMC converts an SMC key's raw bytes to a number based on its fourcc
+// data type. Intel SMC returns big-endian fixed-point formats (fpe2, sp78),
+// Apple Silicon returns little-endian IEEE-754 float ("flt ").
 func decodeSMC(typ string, b []byte) (float64, error) {
 	switch typ {
 	case "flt ":

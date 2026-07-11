@@ -11,8 +11,8 @@ import (
 	"github.com/emgeorrk/pulse/pkg/format"
 )
 
-// metric — одна строка в дропдауне. bar задаёт компактное представление для
-// menu bar; при bar == nil в баре показывается значение из menu.
+// metric is one row in the dropdown. bar defines a compact representation
+// for the menu bar; when bar == nil, the menu value is shown in the bar.
 type metric struct {
 	id    entity.MetricID
 	label string
@@ -20,8 +20,8 @@ type metric struct {
 	bar   func(s entity.Snapshot, c config.Config) string
 }
 
-// barText — компактное представление для menu bar; без явного bar
-// используется значение из menu.
+// barText is the compact representation for the menu bar; without an
+// explicit bar func, the menu value is used.
 func (m metric) barText(s entity.Snapshot, c config.Config) string {
 	if m.bar != nil {
 		return m.bar(s, c)
@@ -29,8 +29,8 @@ func (m metric) barText(s entity.Snapshot, c config.Config) string {
 	return m.menu(s, c)
 }
 
-// group — группа метрик в стиле Vitals: живой агрегат в заголовке,
-// метрики в подменю.
+// group is a Vitals-style metric group: a live aggregate in the header,
+// metrics in the submenu.
 type group struct {
 	emoji     string
 	label     string
@@ -38,8 +38,8 @@ type group struct {
 	metrics   []metric
 }
 
-// buildGroups собирает реестр групп для этого железа: недоступные по caps
-// группы не создаются вовсе. Порядок групп = порядок в дропдауне.
+// buildGroups builds the group registry for this hardware: groups
+// unavailable per caps aren't created at all. Group order = dropdown order.
 func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 	cpu := group{
 		emoji: "⚙️",
@@ -97,7 +97,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group {
 		}
 	}
 	for i := 0; i < hw.NumCores; i++ {
-		core := i // капчурим индекс
+		core := i // capture the index
 		cpu.metrics = append(cpu.metrics, metric{
 			id:    entity.MetricID(fmt.Sprintf("cpu.core.%d", core+1)),
 			label: fmt.Sprintf("Core %d", core+1),

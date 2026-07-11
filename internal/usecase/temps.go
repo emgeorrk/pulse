@@ -6,17 +6,17 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// Имена HID-сенсоров различаются между поколениями чипов (M1: "pACC MTR Temp
-// Sensor…", новее: "PMU tdie…", Intel-SMC: "CPU die"), поэтому агрегируем по
-// подстрокам, а не по точным именам.
+// HID sensor names differ across chip generations (M1: "pACC MTR Temp
+// Sensor…", newer: "PMU tdie…", Intel SMC: "CPU die"), so we aggregate by
+// substring rather than exact name.
 var (
 	cpuTempMarkers = []string{"tdie", "pacc", "eacc", "soc", "cpu"}
 	gpuTempMarkers = []string{"gpu"}
 )
 
-// AggregateTemps считает CPU/GPU-агрегаты (среднее по совпавшим сенсорам)
-// и самый горячий сенсор. Не совпало ничего — агрегат остаётся 0 и UI его
-// не показывает.
+// AggregateTemps computes CPU/GPU aggregates (average across matching
+// sensors) and the hottest sensor. If nothing matches, the aggregate stays
+// 0 and the UI doesn't show it.
 func AggregateTemps(all []entity.Reading) entity.TempStats {
 	stats := entity.TempStats{All: all}
 
@@ -30,7 +30,7 @@ func AggregateTemps(all []entity.Reading) entity.TempStats {
 		if matchAny(name, gpuTempMarkers) {
 			gpuSum += r.Value
 			gpuN++
-			continue // "GPU" не должен попадать в CPU-агрегат по маркеру "soc"
+			continue // "GPU" must not land in the CPU aggregate via the "soc" marker
 		}
 		if matchAny(name, cpuTempMarkers) {
 			cpuSum += r.Value

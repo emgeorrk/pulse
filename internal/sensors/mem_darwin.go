@@ -28,7 +28,7 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// Mem читает состояние памяти через Mach host_statistics64() и sysctl.
+// Mem reads memory state via Mach host_statistics64() and sysctl.
 type Mem struct {
 	total    uint64
 	pageSize uint64
@@ -60,7 +60,7 @@ func (m *Mem) Read() (entity.MemStats, error) {
 	internal := uint64(stat.internal_page_count) * ps
 	purgeable := uint64(stat.purgeable_count) * ps
 
-	// «Memory Used» как в Activity Monitor: App Memory (internal − purgeable)
+	// "Memory Used" as in Activity Monitor: App Memory (internal − purgeable)
 	// + Wired + Compressed.
 	appMem := uint64(0)
 	if internal > purgeable {
@@ -74,14 +74,14 @@ func (m *Mem) Read() (entity.MemStats, error) {
 		Free:      free,
 	}
 
-	// Своп не критичен: при ошибке показываем нули, а не падаем.
+	// Swap isn't critical: on error we show zeros instead of failing.
 	if total, used, err := readSwap(); err == nil {
 		st.SwapTotal, st.SwapUsed = total, used
 	}
 	return st, nil
 }
 
-// xswUsage повторяет struct xsw_usage из <sys/sysctl.h>.
+// xswUsage mirrors struct xsw_usage from <sys/sysctl.h>.
 type xswUsage struct {
 	Total     uint64
 	Avail     uint64

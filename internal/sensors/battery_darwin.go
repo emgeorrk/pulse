@@ -60,8 +60,8 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// Batt читает AppleSmartBattery из IORegistry. На настольных Маках сервиса
-// нет — probe выключит группу.
+// Batt reads AppleSmartBattery from IORegistry. Desktop Macs have no such
+// service — probe will disable the group.
 type Batt struct{}
 
 func NewBattery() *Batt { return &Batt{} }
@@ -74,14 +74,14 @@ func (*Batt) Battery() (entity.BatteryStats, error) {
 
 	st := entity.BatteryStats{
 		Cycles:   int(b.cycleCount),
-		TempC:    float64(b.temperature) / 100, // сотые °C
-		Volts:    float64(b.voltage) / 1000,    // мВ
+		TempC:    float64(b.temperature) / 100, // hundredths of °C
+		Volts:    float64(b.voltage) / 1000,    // mV
 		Charging: b.isCharging != 0,
 		External: b.externalConnected != 0,
 	}
 
-	// Проценты: на Apple Silicon CurrentCapacity уже 0–100, на Intel — mAh;
-	// сырые mAh-ключи работают одинаково везде, они в приоритете.
+	// Percent: on Apple Silicon CurrentCapacity is already 0–100, on Intel
+	// it's mAh; the raw mAh keys work the same everywhere, so prefer them.
 	switch {
 	case b.rawMax > 0:
 		st.Percent = float64(b.rawCurrent) / float64(b.rawMax)
@@ -92,11 +92,11 @@ func (*Batt) Battery() (entity.BatteryStats, error) {
 		st.Health = float64(b.rawMax) / float64(b.designCapacity)
 	}
 
-	// мВ × мА → Вт; Amperage отрицателен при разряде
+	// mV × mA → W; Amperage is negative while discharging
 	st.Watts = st.Volts * float64(b.amperage) / 1000
 
 	st.MinutesLeft = int(b.timeRemaining)
-	if b.timeRemaining <= 0 || b.timeRemaining >= 0xFFFF { // 65535 = вычисляется
+	if b.timeRemaining <= 0 || b.timeRemaining >= 0xFFFF { // 65535 = still being calculated
 		st.MinutesLeft = -1
 	}
 	return st, nil

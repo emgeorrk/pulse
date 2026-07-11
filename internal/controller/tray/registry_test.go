@@ -28,9 +28,9 @@ func fullCaps() entity.Caps {
 	}
 }
 
-// Любая метрика реестра должна пинниться и рендериться в menu bar — даже на
-// пустом кадре, когда сенсорных данных ещё нет (регресс: пункты без bar
-// игнорировали клик).
+// Every metric in the registry must be pinnable and render in the menu bar
+// — even on an empty frame, before any sensor data has arrived (regression:
+// entries without a bar func used to ignore clicks).
 func TestEveryMetricRendersInBar(t *testing.T) {
 	hw := entity.HWInfo{NumCores: 2}
 	cfg := config.Config{}
@@ -39,18 +39,18 @@ func TestEveryMetricRendersInBar(t *testing.T) {
 		for _, g := range buildGroups(hw, fullCaps()) {
 			for _, m := range g.metrics {
 				if got := m.barText(snap, cfg); got == "" {
-					t.Errorf("%s: пустой barText", m.id)
+					t.Errorf("%s: empty barText", m.id)
 				}
 				if got := m.menu(snap, cfg); got == "" {
-					t.Errorf("%s: пустой menu", m.id)
+					t.Errorf("%s: empty menu", m.id)
 				}
 			}
 		}
 	}
 }
 
-// New должен регистрировать в bar-карте все метрики, включая те, что раньше
-// были непиннимыми (disk.free, temp.hottest, …).
+// New must register every metric in the bar map, including ones that used
+// to be unpinnable (disk.free, temp.hottest, …).
 func TestNewRegistersAllMetricsAsPinnable(t *testing.T) {
 	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
 
@@ -59,11 +59,11 @@ func TestNewRegistersAllMetricsAsPinnable(t *testing.T) {
 		total += len(g.metrics)
 	}
 	if len(tr.bar) != total {
-		t.Errorf("в bar %d метрик, в группах %d", len(tr.bar), total)
+		t.Errorf("bar has %d metrics, groups have %d", len(tr.bar), total)
 	}
 	for _, id := range []entity.MetricID{"disk.free", "temp.hottest", "mem.available", "cpu.core.1", "temp.sensor.PMU tdie0"} {
 		if _, ok := tr.bar[id]; !ok {
-			t.Errorf("%s отсутствует в bar-карте", id)
+			t.Errorf("%s missing from the bar map", id)
 		}
 	}
 }

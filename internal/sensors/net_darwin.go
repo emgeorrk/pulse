@@ -17,7 +17,7 @@ typedef struct {
 	unsigned int obytes;
 } pulse_ifstat;
 
-// pulse_net_counters собирает счётчики AF_LINK-интерфейсов (кроме loopback).
+// pulse_net_counters collects counters for AF_LINK interfaces (excluding loopback).
 static int pulse_net_counters(pulse_ifstat *out, int max) {
 	struct ifaddrs *list, *cur;
 	if (getifaddrs(&list) != 0)
@@ -47,8 +47,8 @@ import (
 
 const maxIfaces = 64
 
-// Net читает накопительные счётчики трафика через getifaddrs()/if_data.
-// Счётчики ядра 32-битные — переполнение обрабатывает usecase.
+// Net reads cumulative traffic counters via getifaddrs()/if_data.
+// The kernel counters are 32-bit — usecase handles the overflow.
 type Net struct{}
 
 func NewNet() *Net { return &Net{} }

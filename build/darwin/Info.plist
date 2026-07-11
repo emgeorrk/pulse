@@ -16,7 +16,7 @@
 	<string>0.1.0</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
-	<!-- Background agent: без иконки в Dock и без меню приложения -->
+	<!-- Background agent: no Dock icon and no app menu -->
 	<key>LSUIElement</key>
 	<true/>
 	<key>LSMinimumSystemVersion</key>

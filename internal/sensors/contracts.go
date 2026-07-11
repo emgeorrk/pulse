@@ -1,75 +1,76 @@
-// Package sensors — слой источников данных (аналог repo в go-clean-template).
-// Интерфейсы ниже — точка ветвления для платформенных реализаций: Mach API
-// (этот инкремент, одинаков на Intel и Apple Silicon), дальше SMC на Intel и
-// IOHIDEventSystemClient/IOReport на Apple Silicon.
+// Package sensors is the data-source layer (analogous to repo in
+// go-clean-template). The interfaces below are the branch point for
+// platform implementations: the Mach API (this increment, identical on
+// Intel and Apple Silicon), then SMC on Intel and
+// IOHIDEventSystemClient/IOReport on Apple Silicon.
 package sensors
 
 import "github.com/emgeorrk/pulse/internal/entity"
 
-// CPUSource отдаёт накопительные тики загрузки по ядрам; загрузку считает
-// usecase по дельте двух чтений.
+// CPUSource returns cumulative per-core load ticks; usecase computes load
+// from the delta between two reads.
 type CPUSource interface {
 	Ticks() ([]entity.CoreTicks, error)
 }
 
-// MemSource отдаёт текущее состояние памяти и свопа.
+// MemSource returns the current memory and swap state.
 type MemSource interface {
 	Read() (entity.MemStats, error)
 }
 
-// NetSource отдаёт накопительные счётчики трафика по интерфейсам;
-// скорости считает usecase по дельте.
+// NetSource returns cumulative per-interface traffic counters; usecase
+// computes throughput from the delta.
 type NetSource interface {
 	Counters() ([]entity.NetCounters, error)
 }
 
-// DiskSource отдаёт заполненность корневого тома и накопительные счётчики
-// чтения/записи (IOKit, с загрузки системы).
+// DiskSource returns root-volume usage and cumulative read/write counters
+// (IOKit, since boot).
 type DiskSource interface {
 	Usage() (entity.DiskUsage, error)
 	IOTotals() (read, write uint64, err error)
 }
 
-// TempSource отдаёт показания всех температурных сенсоров в °C.
-// Реализации: HID sensor hub на Apple Silicon, SMC-ключи на Intel.
+// TempSource returns readings for every temperature sensor, in °C.
+// Implementations: HID sensor hub on Apple Silicon, SMC keys on Intel.
 type TempSource interface {
 	Temps() ([]entity.Reading, error)
 }
 
-// VoltSource отдаёт показания сенсоров напряжения в вольтах.
+// VoltSource returns voltage sensor readings, in volts.
 type VoltSource interface {
 	Voltages() ([]entity.Reading, error)
 }
 
-// FanSource отдаёт обороты вентиляторов (SMC на обеих платформах).
+// FanSource returns fan RPMs (SMC on both platforms).
 type FanSource interface {
 	Fans() ([]entity.Fan, error)
 }
 
-// BatterySource отдаёт состояние батареи (IORegistry AppleSmartBattery).
+// BatterySource returns battery state (IORegistry AppleSmartBattery).
 type BatterySource interface {
 	Battery() (entity.BatteryStats, error)
 }
 
-// GPUSource отдаёт загрузку GPU (IOAccelerator PerformanceStatistics).
+// GPUSource returns GPU utilization (IOAccelerator PerformanceStatistics).
 type GPUSource interface {
 	GPU() (entity.GPUStats, error)
 }
 
-// PowerSource отдаёт мощность CPU/GPU/ANE в ваттах, усреднённую с прошлого
-// вызова (IOReport Energy Model — накопительные счётчики энергии).
+// PowerSource returns CPU/GPU/ANE power in watts, averaged since the last
+// call (IOReport Energy Model — cumulative energy counters).
 type PowerSource interface {
 	Power() (entity.PowerStats, error)
 }
 
-// FreqSource отдаёт средневзвешенную частоту CPU по кластерам
-// (IOReport performance states — только Apple Silicon, best effort).
+// FreqSource returns the weighted-average CPU frequency per cluster
+// (IOReport performance states — Apple Silicon only, best effort).
 type FreqSource interface {
 	Frequency() (entity.FreqStats, error)
 }
 
-// Sources — собранные при старте источники; nil = недоступен на этом железе
-// (группа скрывается). CPU и Mem обязательны.
+// Sources holds the sources collected at startup; nil means unavailable on
+// this hardware (its group is hidden). CPU and Mem are mandatory.
 type Sources struct {
 	CPU     CPUSource
 	Mem     MemSource

@@ -12,8 +12,8 @@ func TestPercent(t *testing.T) {
 		{0.074, "7%"},
 		{0.076, "8%"},
 		{1, "100%"},
-		{1.5, "100%"}, // зажим сверху, как в Vitals
-		{-0.1, "0%"},  // мусор снизу не показываем
+		{1.5, "100%"}, // clamped from above, like Vitals
+		{-0.1, "0%"},  // garbage below zero isn't shown
 	}
 	for _, c := range cases {
 		if got := Percent(c.in); got != c.want {
@@ -34,8 +34,8 @@ func TestBytes(t *testing.T) {
 		{1024, false, "1.0 KiB"},
 		{26092059034, false, "24.3 GiB"}, // ≈24.3 GiB
 		{48 * gib, false, "48.0 GiB"},
-		{1048525, false, "1.0 MiB"}, // 1023.95 KiB → показываем в следующей единице, а не "1024.0 KiB"
-		{48 * gib, true, "51.5 GB"}, // decimal-режим
+		{1048525, false, "1.0 MiB"}, // 1023.95 KiB → shown in the next unit up, not "1024.0 KiB"
+		{48 * gib, true, "51.5 GB"}, // decimal mode
 		{1000, true, "1.0 KB"},
 	}
 	for _, c := range cases {
@@ -67,7 +67,7 @@ func TestSpeed(t *testing.T) {
 		want string
 	}{
 		{0, "0 B/s"},
-		{-5, "0 B/s"}, // отрицательная дельта (сброс счётчика) не пугает пользователя
+		{-5, "0 B/s"}, // a negative delta (counter reset) shouldn't alarm the user
 		{1200, "1.2 KB/s"},
 		{1340000, "1.3 MB/s"},
 	}
@@ -106,7 +106,7 @@ func TestSparkline(t *testing.T) {
 	if got := Sparkline(nil); got != "" {
 		t.Errorf("Sparkline(nil) = %q, want empty", got)
 	}
-	// 0 → нижний блок, 1 → верхний, выбросы зажимаются
+	// 0 → bottom block, 1 → top block, outliers are clamped
 	if got := Sparkline([]float64{0, 0.5, 1, 2, -1}); got != "▁▅██▁" {
 		t.Errorf("Sparkline = %q, want ▁▅██▁", got)
 	}

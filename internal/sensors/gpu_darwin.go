@@ -8,8 +8,8 @@ package sensors
 #include <IOKit/IOKitLib.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-// pulse_gpu_util ищет первый IOAccelerator с PerformanceStatistics
-// (на Apple Silicon это AGXAccelerator) и берёт "Device Utilization %".
+// pulse_gpu_util finds the first IOAccelerator with PerformanceStatistics
+// (on Apple Silicon this is AGXAccelerator) and reads "Device Utilization %".
 static int pulse_gpu_util(double *util) {
 	io_iterator_t iter;
 	if (IOServiceGetMatchingServices(kIOMainPortDefault,
@@ -48,7 +48,7 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// GPUSensor читает загрузку GPU из IOAccelerator PerformanceStatistics.
+// GPUSensor reads GPU utilization from IOAccelerator PerformanceStatistics.
 type GPUSensor struct{}
 
 func NewGPU() *GPUSensor { return &GPUSensor{} }

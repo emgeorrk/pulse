@@ -8,8 +8,8 @@ package sensors
 #include <string.h>
 #include <IOKit/IOKitLib.h>
 
-// Структуры протокола AppleSMC (референсы: beltex/SMCKit, dkorunic/iSMC).
-// Раскладка обязана совпадать с ядром байт в байт.
+// AppleSMC protocol structs (references: beltex/SMCKit, dkorunic/iSMC).
+// The layout must match the kernel's byte-for-byte.
 typedef struct {
 	unsigned char  major;
 	unsigned char  minor;
@@ -73,7 +73,7 @@ static int pulse_smc_call(io_connect_t conn, SMCParamStruct *in, SMCParamStruct 
 	return out->result; // 0 = ok, 132 = key not found
 }
 
-// pulse_smc_read читает ключ: сперва info (размер+тип), затем данные.
+// pulse_smc_read reads a key: first info (size+type), then the data.
 static int pulse_smc_read(io_connect_t conn, uint32_t key,
                           uint32_t *dataType, uint32_t *dataSize, uint8_t *bytes) {
 	SMCParamStruct in, out;
@@ -109,8 +109,8 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// SMC — клиент AppleSMC (работает и на Intel, и на Apple Silicon).
-// Здесь: вентиляторы (обе платформы) и температуры (Intel-путь).
+// SMC is an AppleSMC client (works on both Intel and Apple Silicon).
+// Here: fans (both platforms) and temperatures (the Intel path).
 type SMC struct {
 	conn C.io_connect_t
 }
@@ -127,7 +127,7 @@ func (s *SMC) Close() {
 	C.pulse_smc_close(s.conn)
 }
 
-// ReadKey читает и декодирует один SMC-ключ ("FNum", "F0Ac", "TC0P", …).
+// ReadKey reads and decodes a single SMC key ("FNum", "F0Ac", "TC0P", …).
 func (s *SMC) ReadKey(key string) (float64, error) {
 	if len(key) != 4 {
 		return 0, fmt.Errorf("SMC key must be 4 chars: %q", key)
@@ -151,7 +151,7 @@ func (s *SMC) ReadKey(key string) (float64, error) {
 	return decodeSMC(typ, b)
 }
 
-// FanCount — число вентиляторов (0 на безвентиляторных моделях).
+// FanCount returns the number of fans (0 on fanless models).
 func (s *SMC) FanCount() int {
 	n, err := s.ReadKey("FNum")
 	if err != nil || n < 0 || n > 8 {
@@ -160,7 +160,7 @@ func (s *SMC) FanCount() int {
 	return int(n)
 }
 
-// Fans читает обороты всех вентиляторов; паспортные min/max — по возможности.
+// Fans reads the RPM of every fan; rated min/max are read on a best-effort basis.
 func (s *SMC) Fans() ([]entity.Fan, error) {
 	count := s.FanCount()
 	if count == 0 {
@@ -183,9 +183,9 @@ func (s *SMC) Fans() ([]entity.Fan, error) {
 	return fans, nil
 }
 
-// intelTempKeys — курируемый список SMC-ключей температур для Intel-Маков
-// (VirtualSMC Docs/SMCSensorKeys.txt). ВНИМАНИЕ: путь не проверялся на
-// реальном Intel-железе (машина разработки — Apple Silicon).
+// intelTempKeys is a curated list of temperature SMC keys for Intel Macs
+// (VirtualSMC Docs/SMCSensorKeys.txt). WARNING: this path has not been
+// verified on real Intel hardware (the dev machine is Apple Silicon).
 var intelTempKeys = []struct{ key, label string }{
 	{"TC0P", "CPU proximity"},
 	{"TC0D", "CPU die"},
@@ -201,14 +201,14 @@ var intelTempKeys = []struct{ key, label string }{
 	{"TW0P", "Airport"},
 }
 
-// Temps — Intel-путь температур через SMC-ключи; на Apple Silicon
-// используется HID (богаче и точнее), сюда обращаться не нужно.
+// Temps is the Intel temperature path via SMC keys; on Apple Silicon HID is
+// used instead (richer and more accurate), so this isn't called there.
 func (s *SMC) Temps() ([]entity.Reading, error) {
 	var out []entity.Reading
 	for _, k := range intelTempKeys {
 		v, err := s.ReadKey(k.key)
 		if err != nil || v <= 0 || v > 125 {
-			continue // ключа нет на этой модели или мусор — пропускаем
+			continue // key doesn't exist on this model, or garbage value — skip
 		}
 		out = append(out, entity.Reading{Name: k.label, Value: v})
 	}

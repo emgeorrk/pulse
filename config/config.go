@@ -1,7 +1,7 @@
-// Package config — настройки приложения с персистом в JSON
-// (~/Library/Application Support/pulse/config.json). Доступ через Store:
-// UI-обработчики меняют настройки из своих горутин, monitor читает интервал
-// из цикла сэмплирования.
+// Package config holds app settings persisted as JSON
+// (~/Library/Application Support/pulse/config.json). Accessed via Store:
+// UI handlers change settings from their own goroutines, monitor reads the
+// interval from the sampling loop.
 package config
 
 import (
@@ -25,7 +25,7 @@ type Config struct {
 	IntervalSec   int               `json:"interval_sec"`
 	TempUnit      TempUnit          `json:"temp_unit"`
 	DecimalBytes  bool              `json:"decimal_bytes"` // false → GiB (binary), true → GB (decimal)
-	Pinned        []entity.MetricID `json:"pinned"`        // порядок = порядок в menu bar
+	Pinned        []entity.MetricID `json:"pinned"`        // order = order in the menu bar
 	ShowSparkline bool              `json:"show_sparkline"`
 	StartAtLogin  bool              `json:"start_at_login"`
 }
@@ -56,8 +56,8 @@ func (c Config) IsPinned(id entity.MetricID) bool {
 	return false
 }
 
-// Store — потокобезопасный доступ к настройкам; каждое изменение сразу
-// сохраняется на диск.
+// Store provides thread-safe access to settings; every change is saved to
+// disk immediately.
 type Store struct {
 	mu   sync.Mutex
 	c    Config
@@ -72,8 +72,8 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, "Library", "Application Support", "pulse", "config.json"), nil
 }
 
-// Load читает настройки из path; при отсутствии файла или битом JSON
-// возвращает дефолты — приложение должно запускаться в любом случае.
+// Load reads settings from path; if the file is missing or the JSON is
+// broken, it returns defaults — the app must be able to start regardless.
 func Load(path string) *Store {
 	s := &Store{c: defaults(), path: path}
 	data, err := os.ReadFile(path)
@@ -94,7 +94,7 @@ func Load(path string) *Store {
 	return s
 }
 
-// Get возвращает копию текущих настроек (Pinned копируется).
+// Get returns a copy of the current settings (Pinned is copied).
 func (s *Store) Get() Config {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,8 +103,8 @@ func (s *Store) Get() Config {
 	return c
 }
 
-// Update применяет изменение и сохраняет на диск. Ошибка записи не фатальна:
-// настройки продолжают действовать в памяти.
+// Update applies a change and saves it to disk. A write error is not fatal:
+// the settings still take effect in memory.
 func (s *Store) Update(fn func(*Config)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -112,7 +112,7 @@ func (s *Store) Update(fn func(*Config)) error {
 	return s.save()
 }
 
-// TogglePin добавляет/убирает метрику из menu bar; возвращает новое состояние.
+// TogglePin adds/removes a metric from the menu bar; returns the new state.
 func (s *Store) TogglePin(id entity.MetricID) bool {
 	pinned := false
 	s.Update(func(c *Config) {

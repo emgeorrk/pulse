@@ -6,34 +6,34 @@ PLIST    := build/darwin/Info.plist
 
 .PHONY: all build bundle sign run once test vet clean help
 
-all: sign ### собрать и подписать .app (по умолчанию)
+all: sign ### build and sign the .app (default)
 
-build: ### скомпилировать бинарник (CGO обязателен: systray/Cocoa + Mach)
+build: ### compile the binary (CGO required: systray/Cocoa + Mach)
 	CGO_ENABLED=1 go build -o $(BINARY) ./cmd/pulse
 
-bundle: build ### собрать $(APP_NAME).app с LSUIElement=true (без иконки в Dock)
+bundle: build ### build $(APP_NAME).app with LSUIElement=true (no Dock icon)
 	rm -rf $(BUNDLE)
 	mkdir -p $(BUNDLE)/Contents/MacOS
 	cp $(BINARY) $(BUNDLE)/Contents/MacOS/pulse
 	cp $(PLIST) $(BUNDLE)/Contents/Info.plist
 
-sign: bundle ### ad-hoc подпись для локального запуска
+sign: bundle ### ad-hoc sign for local use
 	codesign -s - --force $(BUNDLE)
 
-run: sign ### собрать, подписать и запустить
+run: sign ### build, sign, and launch
 	open $(BUNDLE)
 
-once: build ### напечатать один кадр метрик в stdout (проверка сенсоров без UI)
+once: build ### print one metrics frame to stdout (sensor check without UI)
 	$(BINARY) -once
 
-test: ### юнит-тесты
+test: ### unit tests
 	go test ./...
 
-vet: ### статический анализ
+vet: ### static analysis
 	go vet ./...
 
-clean: ### удалить артефакты сборки
+clean: ### remove build artifacts
 	rm -rf $(BIN_DIR)
 
-help: ### список целей
+help: ### list targets
 	@grep -E '^[a-zA-Z_-]+:.*### .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*### "}; {printf "  %-8s %s\n", $$1, $$2}'

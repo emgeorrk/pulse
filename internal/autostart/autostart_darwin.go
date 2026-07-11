@@ -1,8 +1,8 @@
 //go:build darwin
 
-// Package autostart управляет запуском при логине через LaunchAgent-плист
-// в ~/Library/LaunchAgents (без SMAppService — не требует ObjC и работает
-// с ad-hoc подписью).
+// Package autostart manages launch-at-login via a LaunchAgent plist in
+// ~/Library/LaunchAgents (not SMAppService — this avoids requiring ObjC and
+// works with ad-hoc signing).
 package autostart
 
 import (
@@ -21,7 +21,7 @@ func plistPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", label+".plist"), nil
 }
 
-// Plist генерирует содержимое LaunchAgent-плиста для данного бинарника.
+// Plist generates the LaunchAgent plist content for the given binary.
 func Plist(execPath string) string {
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -42,7 +42,7 @@ func Plist(execPath string) string {
 `, label, execPath)
 }
 
-// Enable записывает плист, указывающий на текущий бинарник.
+// Enable writes a plist pointing at the current binary.
 func Enable() error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -58,7 +58,7 @@ func Enable() error {
 	return os.WriteFile(path, []byte(Plist(exe)), 0o644)
 }
 
-// Disable удаляет плист; отсутствие файла — не ошибка.
+// Disable removes the plist; a missing file is not an error.
 func Disable() error {
 	path, err := plistPath()
 	if err != nil {

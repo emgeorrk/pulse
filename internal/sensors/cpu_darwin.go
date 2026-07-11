@@ -30,8 +30,8 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// CPU читает тики загрузки по ядрам через Mach host_processor_info().
-// API одинаков на Intel и Apple Silicon, sudo не требуется.
+// CPU reads per-core load ticks via Mach host_processor_info().
+// The API is identical on Intel and Apple Silicon, and needs no sudo.
 type CPU struct{}
 
 func NewCPU() *CPU { return &CPU{} }

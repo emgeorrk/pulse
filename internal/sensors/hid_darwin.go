@@ -6,9 +6,9 @@ package sensors
 #cgo LDFLAGS: -framework IOKit -framework CoreFoundation
 #include <CoreFoundation/CoreFoundation.h>
 
-// IOHIDEventSystemClient — приватный, но стабильный API IOKit: именно так
-// читают сенсоры Apple Silicon mactop, iSMC и exelban/stats. Публичных
-// хедеров нет — декларируем сами.
+// IOHIDEventSystemClient is a private but stable IOKit API: this is exactly
+// how mactop, iSMC, and exelban/stats read Apple Silicon sensors. There are
+// no public headers — we declare them ourselves.
 typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
 typedef struct __IOHIDServiceClient *IOHIDServiceClientRef;
 typedef struct __IOHIDEvent *IOHIDEventRef;
@@ -24,9 +24,9 @@ double IOHIDEventGetFloatValue(IOHIDEventRef, int32_t);
 #define kIOHIDEventTypePower       25
 #define IOHIDEventFieldBase(type)  ((type) << 16)
 
-// Страницы/usage сенсоров Apple (AppleHIDUsageTables):
-//   0xff00/5 — температурные сенсоры
-//   0xff08/3 — напряжение, 0xff08/2 — ток
+// Apple sensor pages/usages (AppleHIDUsageTables):
+//   0xff00/5 — temperature sensors
+//   0xff08/3 — voltage, 0xff08/2 — current
 static IOHIDEventSystemClientRef pulse_hid_client(int page, int usage) {
 	IOHIDEventSystemClientRef client = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	if (!client)
@@ -45,7 +45,7 @@ static IOHIDEventSystemClientRef pulse_hid_client(int page, int usage) {
 	return client;
 }
 
-// pulse_hid_read читает имя и значение одного сервиса; -1 = события нет.
+// pulse_hid_read reads one service's name and value; -1 means no event.
 static int pulse_hid_read(IOHIDServiceClientRef svc, int64_t eventType,
                           double *val, char *name, int nameLen) {
 	name[0] = 0;
@@ -72,8 +72,9 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// HID читает температуры и напряжения с HID sensor hub — путь Apple Silicon.
-// Клиенты создаются один раз: список сервисов стабилен в рамках сессии.
+// HID reads temperatures and voltages from the HID sensor hub — the Apple
+// Silicon path. Clients are created once: the service list is stable for
+// the session.
 type HID struct {
 	temp C.IOHIDEventSystemClientRef
 	volt C.IOHIDEventSystemClientRef
@@ -90,17 +91,17 @@ func NewHID() (*HID, error) {
 	return h, nil
 }
 
-// Temps — температурные сенсоры с валидными значениями (0 < t ≤ 125 °C).
-// Калибровочные каналы (tcal) — не температуры, отбрасываем; несколько
-// каналов одного сенсора усредняются в одно показание.
+// Temps returns temperature sensors with valid values (0 < t ≤ 125 °C).
+// Calibration channels (tcal) aren't temperatures and are discarded;
+// multiple channels for the same sensor are averaged into one reading.
 func (h *HID) Temps() ([]entity.Reading, error) {
 	return h.read(h.temp, C.kIOHIDEventTypeTemperature, func(name string, v float64) bool {
 		return v > 0 && v <= 125 && !strings.Contains(strings.ToLower(name), "tcal")
 	})
 }
 
-// Voltages — сенсоры напряжения (0.01 ≤ v ≤ 100 В; спящие LDO с нулём не
-// показываем).
+// Voltages returns voltage sensors (0.01 ≤ v ≤ 100 V; sleeping LDOs at zero
+// are excluded).
 func (h *HID) Voltages() ([]entity.Reading, error) {
 	return h.read(h.volt, C.kIOHIDEventTypePower, func(_ string, v float64) bool {
 		return v >= 0.01 && v <= 100
@@ -111,7 +112,7 @@ func (h *HID) read(client C.IOHIDEventSystemClientRef, eventType int64, valid fu
 	if client == nil {
 		return nil, fmt.Errorf("HID client not created")
 	}
-	// CF-типы в cgo — uintptr (правила pointer-invariance), сравниваем с 0
+	// CF types are uintptr in cgo (pointer-invariance rules), so compare to 0
 	services := C.IOHIDEventSystemClientCopyServices(client)
 	if services == 0 {
 		return nil, fmt.Errorf("no HID services")

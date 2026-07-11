@@ -1,7 +1,7 @@
-// Package format форматирует значения метрик в стиле Vitals (values.js):
-// проценты — целые с зажимом на 100, память — единицы с одним знаком после
-// запятой (binary или decimal по настройке), скорость сети — десятичные
-// единицы, температура — °C/°F.
+// Package format formats metric values Vitals-style (values.js): percentages
+// are integers clamped at 100, memory uses one decimal digit (binary or
+// decimal units per setting), network speed uses decimal units, temperature
+// is °C/°F.
 package format
 
 import (
@@ -17,7 +17,7 @@ var (
 	sparkRunes   = []rune("▁▂▃▄▅▆▇█")
 )
 
-// Percent переводит долю 0..1 в "7%"; значения вне диапазона зажимаются.
+// Percent converts a 0..1 fraction to "7%"; out-of-range values are clamped.
 func Percent(v float64) string {
 	p := math.Round(v * 100)
 	if p > 100 {
@@ -29,7 +29,7 @@ func Percent(v float64) string {
 	return fmt.Sprintf("%d%%", int(p))
 }
 
-// Bytes переводит байты в "24.3 GiB" (или "26.1 GB" при decimal).
+// Bytes converts bytes to "24.3 GiB" (or "26.1 GB" when decimal).
 func Bytes(v uint64, decimal bool) string {
 	val, unit := scaleBytes(v, decimal)
 	if unit == "B" {
@@ -38,7 +38,7 @@ func Bytes(v uint64, decimal bool) string {
 	return fmt.Sprintf("%.1f %s", val, unit)
 }
 
-// BytesShort — компактный вариант для menu bar: "24.3G".
+// BytesShort is a compact variant for the menu bar: "24.3G".
 func BytesShort(v uint64, decimal bool) string {
 	val, unit := scaleBytes(v, decimal)
 	if unit == "B" {
@@ -47,7 +47,7 @@ func BytesShort(v uint64, decimal bool) string {
 	return fmt.Sprintf("%.1f%s", val, unit[:1])
 }
 
-// Speed — байты/с в десятичных единицах, как Vitals: "1.2 MB/s".
+// Speed formats bytes/s in decimal units, like Vitals: "1.2 MB/s".
 func Speed(bytesPerSec float64) string {
 	if bytesPerSec < 0 {
 		bytesPerSec = 0
@@ -59,7 +59,7 @@ func Speed(bytesPerSec float64) string {
 	return fmt.Sprintf("%.1f %s/s", val, unit)
 }
 
-// SpeedShort — для menu bar: "1.2M/s".
+// SpeedShort is for the menu bar: "1.2M/s".
 func SpeedShort(bytesPerSec float64) string {
 	if bytesPerSec < 0 {
 		bytesPerSec = 0
@@ -71,7 +71,7 @@ func SpeedShort(bytesPerSec float64) string {
 	return fmt.Sprintf("%.1f%s/s", val, unit[:1])
 }
 
-// Temp — градусы Цельсия в "54°C" или "129°F".
+// Temp converts Celsius degrees to "54°C" or "129°F".
 func Temp(celsius float64, fahrenheit bool) string {
 	unit := "C"
 	v := celsius
@@ -82,7 +82,7 @@ func Temp(celsius float64, fahrenheit bool) string {
 	return fmt.Sprintf("%d°%s", int(math.Round(v)), unit)
 }
 
-// TempShort — для menu bar: "54°".
+// TempShort is for the menu bar: "54°".
 func TempShort(celsius float64, fahrenheit bool) string {
 	v := celsius
 	if fahrenheit {
@@ -91,22 +91,22 @@ func TempShort(celsius float64, fahrenheit bool) string {
 	return fmt.Sprintf("%d°", int(math.Round(v)))
 }
 
-// RPM — обороты вентилятора: "1850 RPM".
+// RPM formats fan speed: "1850 RPM".
 func RPM(v float64) string {
 	return fmt.Sprintf("%d RPM", int(math.Round(v)))
 }
 
-// Watts — мощность: "8.4 W".
+// Watts formats power: "8.4 W".
 func Watts(v float64) string {
 	return fmt.Sprintf("%.1f W", v)
 }
 
-// Volts — напряжение: "13.08 V".
+// Volts formats voltage: "13.08 V".
 func Volts(v float64) string {
 	return fmt.Sprintf("%.2f V", v)
 }
 
-// Hertz — частота: "3.5 GHz".
+// Hertz formats frequency: "3.5 GHz".
 func Hertz(hz float64) string {
 	if hz <= 0 {
 		return "0 Hz"
@@ -115,8 +115,8 @@ func Hertz(hz float64) string {
 	return fmt.Sprintf("%.1f %s", val, unit)
 }
 
-// Sparkline рисует историю долей 0..1 юникод-блоками: "▂▃▆▄".
-// Пустая история → пустая строка.
+// Sparkline renders a history of 0..1 fractions as unicode blocks: "▂▃▆▄".
+// An empty history yields an empty string.
 func Sparkline(vals []float64) string {
 	var b strings.Builder
 	for _, v := range vals {
@@ -148,7 +148,7 @@ func scale(v, unit float64, units []string) (float64, string) {
 		v /= unit
 		exp++
 	}
-	// как в Vitals: 1023.96 KiB показываем как 1.0 MiB, а не "1024.0 KiB"
+	// as in Vitals: show 1023.96 KiB as 1.0 MiB, not "1024.0 KiB"
 	if exp < len(units)-1 && v >= unit-0.05 {
 		v /= unit
 		exp++

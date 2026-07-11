@@ -1,5 +1,5 @@
-// Package usecase содержит логику мониторинга: цикл сэмплирования сенсоров
-// и расчёт метрик по дельтам накопительных счётчиков.
+// Package usecase contains the monitoring logic: the sensor sampling loop
+// and metric computation from cumulative-counter deltas.
 package usecase
 
 import (
@@ -11,14 +11,14 @@ import (
 	"github.com/emgeorrk/pulse/internal/sensors"
 )
 
-// historyLen — сколько последних значений CPU хранить для спарклайна.
+// historyLen is how many recent CPU values to keep for the sparkline.
 const historyLen = 12
 
 type Monitor struct {
 	src   sensors.Sources
 	store *config.Store
 
-	// состояние между тиками
+	// state carried between ticks
 	prevTicks []entity.CoreTicks
 	prevNet   map[string]entity.NetCounters
 	sessDown  uint64
@@ -34,11 +34,11 @@ func NewMonitor(src sensors.Sources, store *config.Store) *Monitor {
 	return &Monitor{src: src, store: store}
 }
 
-// Start запускает цикл сэмплирования в отдельной горутине (никогда не на
-// UI-потоке). Первый кадр приходит через interval — сразу с осмысленными
-// дельтами. Интервал перечитывается из настроек на каждом тике, так что
-// смена в Settings подхватывается без рестарта. Канал закрывается при
-// отмене ctx.
+// Start launches the sampling loop in its own goroutine (never on the UI
+// thread). The first frame arrives after `interval` — with meaningful
+// deltas right away. The interval is re-read from settings on every tick,
+// so changing it in Settings takes effect without a restart. The channel
+// closes when ctx is canceled.
 func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 	out := make(chan entity.Snapshot, 1)
 	go func() {
@@ -63,7 +63,7 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 
 			snap := m.sample()
 
-			// UI не успел забрать прошлый кадр — просто роняем его.
+			// UI hasn't picked up the previous frame yet — just drop it.
 			select {
 			case out <- snap:
 			default:
@@ -73,7 +73,7 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 	return out
 }
 
-// prime снимает первые значения счётчиков — точки отсчёта для дельт.
+// prime takes the first counter readings — the baseline for deltas.
 func (m *Monitor) prime() {
 	m.prevTicks, _ = m.src.CPU.Ticks()
 	if m.src.Net != nil {
@@ -90,7 +90,7 @@ func (m *Monitor) prime() {
 	m.history = make([]float64, 0, historyLen)
 }
 
-// sample снимает один кадр всех доступных метрик.
+// sample takes one frame of all available metrics.
 func (m *Monitor) sample() entity.Snapshot {
 	now := time.Now()
 	dwell := now.Sub(m.lastTick).Seconds()
@@ -183,8 +183,8 @@ func (m *Monitor) sample() entity.Snapshot {
 	return snap
 }
 
-// CPUUsage считает загрузку по дельте накопительных тиков. Тики 32-битные и
-// переполняются; вычитание в uint32 корректно по модулю 2^32.
+// CPUUsage computes load from the delta of cumulative ticks. Ticks are
+// 32-bit and wrap around; subtraction in uint32 is correct modulo 2^32.
 func CPUUsage(prev, cur []entity.CoreTicks) entity.CPUStats {
 	n := min(len(prev), len(cur))
 	stats := entity.CPUStats{Cores: make([]float64, n)}
@@ -207,9 +207,9 @@ func CPUUsage(prev, cur []entity.CoreTicks) entity.CPUStats {
 	return stats
 }
 
-// NetRates считает скорости по дельтам 32-битных счётчиков if_data
-// (вычитание в uint32 корректно при переполнении). Интерфейсы без прошлого
-// значения (появились между тиками) пропускаются до следующего тика.
+// NetRates computes throughput from the deltas of 32-bit if_data counters
+// (subtraction in uint32 is correct on overflow). Interfaces with no
+// previous value (they appeared between ticks) are skipped until the next tick.
 func NetRates(prev map[string]entity.NetCounters, cur []entity.NetCounters, dwellSec float64) entity.NetStats {
 	var stats entity.NetStats
 	for _, c := range cur {
@@ -236,8 +236,8 @@ func countersMap(counters []entity.NetCounters) map[string]entity.NetCounters {
 	return m
 }
 
-// rate64 — скорость по 64-битным счётчикам; сброс счётчика (cur < prev)
-// не даёт отрицательных скоростей.
+// rate64 computes a rate from 64-bit counters; a counter reset (cur < prev)
+// never produces a negative rate.
 func rate64(prev, cur uint64, dwellSec float64) float64 {
 	if cur < prev {
 		return 0

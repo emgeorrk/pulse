@@ -1,8 +1,8 @@
 //go:build darwin
 
-// Package app связывает слои: sensors → usecase → tray. Здесь же решается,
-// какие источники доступны на этом железе (Caps): упавший при старте сенсор
-// выключает свою группу, но не приложение.
+// Package app wires the layers together: sensors → usecase → tray. It also
+// decides which sources are available on this hardware (Caps): a sensor that
+// fails at startup disables its own group, not the whole app.
 package app
 
 import (
@@ -21,13 +21,14 @@ import (
 func loadStore() *config.Store {
 	path, err := config.DefaultPath()
 	if err != nil {
-		path = "" // настройки будут жить только в памяти
+		path = "" // settings will live in memory only
 	}
 	return config.Load(path)
 }
 
-// probe собирает доступные источники и Caps для UI. Каждый сенсор пробуется
-// реальным чтением: не отвечает — группа выключается, приложение живёт.
+// probe collects the available sources and Caps for the UI. Each sensor is
+// probed with a real read: if it doesn't respond, its group is disabled but
+// the app keeps running.
 func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	mem, err := sensors.NewMem()
 	if err != nil {
@@ -41,7 +42,7 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 		src.Net = net
 		caps.Net = true
 		for _, c := range counters {
-			// в меню — только интерфейсы, у которых был трафик к моменту старта
+			// menu only lists interfaces that already had traffic at startup
 			if c.Rx > 0 || c.Tx > 0 {
 				caps.NetIfaces = append(caps.NetIfaces, c.Name)
 			}
@@ -54,9 +55,9 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 		caps.Disk = true
 	}
 
-	// ── температуры и вольтаж: пути Intel и Apple Silicon разные ──
+	// ── temps and voltage: Intel and Apple Silicon paths differ ──
 	if hw.IsAppleSilicon {
-		// Apple Silicon: HID sensor hub
+		// Apple Silicon: HID is primary for temperatures and voltage.
 		if hid, err := sensors.NewHID(); err == nil {
 			if temps, err := hid.Temps(); err == nil {
 				src.Temp = hid
@@ -75,7 +76,8 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 		}
 	}
 
-	// SMC: вентиляторы на обеих платформах; температуры — Intel-путь
+	// SMC: fans on both platforms; Intel temperatures and the narrow Apple
+	// Silicon GPU fallback use the same connection.
 	if smc, err := sensors.NewSMC(); err == nil {
 		if !hw.IsAppleSilicon {
 			if temps, err := smc.Temps(); err == nil {
@@ -118,7 +120,7 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) {
 	return src, caps, nil
 }
 
-// Run запускает menu bar приложение; блокирует до выхода.
+// Run starts the menu bar app; blocks until it quits.
 func Run() error {
 	store := loadStore()
 	hw := sensors.ReadHWInfo()
@@ -135,8 +137,8 @@ func Run() error {
 	return nil
 }
 
-// RunOnce печатает один кадр метрик в stdout и выходит — для проверки
-// сенсоров без UI (pulse -once).
+// RunOnce prints one metrics frame to stdout and exits — for checking
+// sensors without the UI (pulse -once).
 func RunOnce() error {
 	store := loadStore()
 	cfg := store.Get()
@@ -163,7 +165,7 @@ func RunOnce() error {
 
 	fmt.Printf("%s · %s · macOS %s · %d cores · apple silicon: %v\n",
 		hw.Chip, hw.Model, hw.OSVersion, hw.NumCores, hw.IsAppleSilicon)
-	fmt.Printf("CPU total: %s (за %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
+	fmt.Printf("CPU total: %s (over %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
 	fmt.Printf("CPU cores: %s\n", strings.Join(perCore, " "))
 	if snap.Freq != nil {
 		fmt.Printf("CPU freq: %s", format.Hertz(snap.Freq.Max))

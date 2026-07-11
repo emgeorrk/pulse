@@ -9,7 +9,7 @@ package sensors
 #include <IOKit/storage/IOBlockStorageDriver.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-// pulse_disk_io суммирует байты чтения/записи по всем блочным устройствам.
+// pulse_disk_io sums read/write bytes across every block storage device.
 static int pulse_disk_io(uint64_t *readBytes, uint64_t *writeBytes) {
 	io_iterator_t iter;
 	if (IOServiceGetMatchingServices(kIOMainPortDefault,
@@ -54,8 +54,8 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// Disk: заполненность корневого тома через statfs, I/O — через IOKit
-// IOBlockStorageDriver (64-битные счётчики с загрузки системы).
+// Disk: root-volume usage via statfs, I/O via IOKit IOBlockStorageDriver
+// (64-bit counters since boot).
 type Disk struct{}
 
 func NewDisk() *Disk { return &Disk{} }

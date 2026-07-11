@@ -8,9 +8,9 @@ package sensors
 #include <IOKit/IOKitLib.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-// pulse_product_name читает product-name из IODeviceTree:/product —
-// человекочитаемое имя модели ("MacBook Pro (16-inch, M5 Pro)").
-// Узел есть только на Apple Silicon; на Intel вернёт -1.
+// pulse_product_name reads product-name from IODeviceTree:/product — a
+// human-readable model name ("MacBook Pro (16-inch, M5 Pro)").
+// The node only exists on Apple Silicon; on Intel this returns -1.
 static int pulse_product_name(char *buf, size_t cap) {
 	io_registry_entry_t e = IORegistryEntryFromPath(kIOMainPortDefault,
 	    "IODeviceTree:/product");
@@ -43,8 +43,8 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
-// ReadHWInfo определяет чип, модель Mac и версию macOS. Ошибки sysctl не
-// фатальны — недостающие поля остаются пустыми, UI их просто не покажет.
+// ReadHWInfo determines the chip, Mac model, and macOS version. sysctl
+// errors aren't fatal — missing fields stay empty, and the UI just won't show them.
 func ReadHWInfo() entity.HWInfo {
 	chip, _ := unix.Sysctl("machdep.cpu.brand_string")
 	model, _ := unix.Sysctl("hw.model")

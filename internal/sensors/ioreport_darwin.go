@@ -10,8 +10,8 @@ package sensors
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 
-// IOReport — приватный, но стабильный API (libIOReport.tbd есть в SDK);
-// так мощность читают mactop и socpowerbud. Публичных хедеров нет.
+// IOReport is a private but stable API (libIOReport.tbd ships in the SDK);
+// this is how mactop and socpowerbud read power. There are no public headers.
 typedef struct IOReportSubscription *IOReportSubscriptionRef;
 
 extern CFDictionaryRef IOReportCopyChannelsInGroup(CFStringRef group, CFStringRef subgroup,
@@ -60,7 +60,7 @@ static IOReportSubscriptionRef pulse_ioreport_open(const char *group, const char
 	return sub;
 }
 
-// pulse_ioreport_read_states выгребает state-каналы (residency по P-стейтам).
+// pulse_ioreport_read_states pulls the state channels (residency per P-state).
 static int pulse_ioreport_read_states(IOReportSubscriptionRef sub, CFMutableDictionaryRef subbed,
                                       pulse_states *out, int max) {
 	CFDictionaryRef samples = IOReportCreateSamples(sub, subbed, NULL);
@@ -96,8 +96,8 @@ static int pulse_ioreport_read_states(IOReportSubscriptionRef sub, CFMutableDict
 	return n;
 }
 
-// pulse_devicetree_bytes копирует бинарное свойство из IODeviceTree
-// (таблицы частот voltage-states*-sram лежат в узле pmgr).
+// pulse_devicetree_bytes copies a binary property from IODeviceTree (the
+// voltage-states*-sram frequency tables live under the pmgr node).
 static int pulse_devicetree_bytes(const char *path, const char *prop,
                                   unsigned char *out, int max) {
 	io_registry_entry_t e = IORegistryEntryFromPath(kIOMainPortDefault, path);
@@ -120,9 +120,9 @@ static int pulse_devicetree_bytes(const char *path, const char *prop,
 	return n;
 }
 
-// pulse_ioreport_read выгребает накопительные счётчики энергии по каналам.
-// Каналы Energy Model простые (single integer), блоки IOReportIterate не
-// нужны — массив IOReportChannels обходится напрямую.
+// pulse_ioreport_read pulls the cumulative energy counters per channel.
+// Energy Model channels are simple (single integer), so IOReportIterate
+// blocks aren't needed — the IOReportChannels array is walked directly.
 static int pulse_ioreport_read(IOReportSubscriptionRef sub, CFMutableDictionaryRef subbed,
                                pulse_energy *out, int max) {
 	CFDictionaryRef samples = IOReportCreateSamples(sub, subbed, NULL);
@@ -168,9 +168,9 @@ const (
 	maxStateChannels  = 16
 )
 
-// IOReport отдаёт мощность CPU/GPU/ANE (группа Energy Model) и частоту CPU
-// (группа CPU Stats, performance states), усреднённые между вызовами:
-// каналы — накопительные счётчики, значение = дельта / время.
+// IOReport returns CPU/GPU/ANE power (Energy Model group) and CPU frequency
+// (CPU Stats group, performance states), averaged between calls: channels
+// are cumulative counters, value = delta / time.
 type IOReport struct {
 	sub    C.IOReportSubscriptionRef
 	subbed C.CFMutableDictionaryRef
@@ -179,8 +179,8 @@ type IOReport struct {
 
 	fsub    C.IOReportSubscriptionRef
 	fsubbed C.CFMutableDictionaryRef
-	prevRes map[string][]uint64 // residency по стейтам на кластер
-	tables  [][]float64         // таблицы частот из device tree, Гц (по числу стейтов)
+	prevRes map[string][]uint64 // per-state residency per cluster
+	tables  [][]float64         // frequency tables from the device tree, Hz (keyed by state count)
 }
 
 func NewIOReport() (*IOReport, error) {
@@ -189,27 +189,27 @@ func NewIOReport() (*IOReport, error) {
 	if r.sub == nil {
 		return nil, fmt.Errorf("IOReport Energy Model unavailable")
 	}
-	// первое чтение — точка отсчёта
+	// first read establishes the baseline
 	if _, err := r.Power(); err != nil {
 		return nil, err
 	}
 
-	// частота — best effort: нет perf-state каналов или таблиц частот в
-	// device tree — просто живём без неё
+	// frequency is best effort: if there are no perf-state channels or
+	// frequency tables in the device tree, we just live without it
 	r.tables = readFreqTables()
 	if len(r.tables) > 0 {
 		r.fsub = C.pulse_ioreport_open(C.CString("CPU Stats"),
 			C.CString("CPU Complex Performance States"), &r.fsubbed)
 		if r.fsub != nil {
 			r.prevRes = map[string][]uint64{}
-			r.Frequency() // точка отсчёта
+			r.Frequency() // establishes the baseline
 		}
 	}
 	return r, nil
 }
 
-// FreqClusters — имена кластерных каналов, по которым считается частота
-// (известны после первого сэмпла).
+// FreqClusters returns the cluster channel names frequency is computed
+// from (known after the first sample).
 func (r *IOReport) FreqClusters() []string {
 	names := make([]string, 0, len(r.prevRes))
 	for name := range r.prevRes {
@@ -219,7 +219,7 @@ func (r *IOReport) FreqClusters() []string {
 	return names
 }
 
-// HasFreq — доступна ли частота CPU на этом железе.
+// HasFreq reports whether CPU frequency is available on this hardware.
 func (r *IOReport) HasFreq() bool { return r.fsub != nil }
 
 func (r *IOReport) Power() (entity.PowerStats, error) {
@@ -240,20 +240,21 @@ func (r *IOReport) Power() (entity.PowerStats, error) {
 		val := int64(buf[i].value)
 		cur[name] = val
 
-		// PULSE_DEBUG=1 pulse -once — посмотреть имена каналов на новом чипе
+		// PULSE_DEBUG=1 pulse -once — inspect channel names on a new chip
 		if os.Getenv("PULSE_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "ioreport: %q [%s] = %d\n", name, unit, val)
 		}
 
 		prev, ok := r.prev[name]
 		if !ok || dt <= 0 || val < prev {
-			continue // первый вызов или сброс счётчика
+			continue // first call, or the counter was reset
 		}
 		watts := float64(val-prev) / joulesDivisor(unit) / dt
 
-		// Имена каналов зависят от поколения чипа: M1 — "CPU Energy"/"GPU
-		// Energy"/"ANE Energy"; M5 Pro — PACC_x (P-ядра), MCPU0_x (E-ядра),
-		// MCPM/PCPM (кластерные power-менеджеры), GPU/ANE-каналов нет.
+		// Channel names depend on the chip generation: M1 uses "CPU
+		// Energy"/"GPU Energy"/"ANE Energy"; M5 Pro uses PACC_x (P-cores),
+		// MCPU0_x (E-cores), MCPM/PCPM (cluster power managers), and has no
+		// GPU/ANE channels.
 		lower := strings.ToLower(name)
 		switch {
 		case strings.Contains(lower, "gpu") || strings.Contains(lower, "gfx"):
@@ -272,7 +273,7 @@ func (r *IOReport) Power() (entity.PowerStats, error) {
 	return stats, nil
 }
 
-// joulesDivisor переводит единицу канала в делитель до джоулей.
+// joulesDivisor converts a channel's unit into a divisor down to joules.
 func joulesDivisor(unit string) float64 {
 	switch strings.TrimSpace(unit) {
 	case "nJ":
@@ -286,9 +287,9 @@ func joulesDivisor(unit string) float64 {
 	}
 }
 
-// Frequency — средневзвешенная по residency частота на кластерный канал
-// (MCPU0/MCPU1/PCPU на M5 Pro, ECPU/PCPU на M1) с прошлого вызова.
-// Таблица частот подбирается по числу активных стейтов канала.
+// Frequency returns the residency-weighted frequency per cluster channel
+// (MCPU0/MCPU1/PCPU on M5 Pro, ECPU/PCPU on M1) since the last call.
+// The frequency table is chosen by the channel's number of active states.
 func (r *IOReport) Frequency() (entity.FreqStats, error) {
 	if r.fsub == nil {
 		return entity.FreqStats{}, fmt.Errorf("perf states unavailable")
@@ -302,8 +303,8 @@ func (r *IOReport) Frequency() (entity.FreqStats, error) {
 	var stats entity.FreqStats
 	for i := 0; i < n; i++ {
 		name := C.GoString(&buf[i].name[0])
-		// CPM-каналы (кластерные power-менеджеры) и _IDLE-зеркала дублируют
-		// картину CPU-каналов — пропускаем
+		// CPM channels (cluster power managers) and _IDLE mirrors duplicate
+		// the CPU channels — skip them
 		if strings.Contains(name, "CPM") || strings.HasSuffix(name, "_IDLE") {
 			continue
 		}
@@ -319,8 +320,8 @@ func (r *IOReport) Frequency() (entity.FreqStats, error) {
 			continue
 		}
 
-		// активные стейты — всё, кроме IDLE/DOWN/OFF; их порядок совпадает
-		// с порядком таблицы частот из device tree
+		// active states are everything except IDLE/DOWN/OFF; their order
+		// matches the order of the device-tree frequency table
 		var deltas []uint64
 		for s := 0; s < ns; s++ {
 			st := strings.ToUpper(C.GoString(&buf[i].statenames[s][0]))
@@ -350,9 +351,10 @@ func (r *IOReport) Frequency() (entity.FreqStats, error) {
 	return stats, nil
 }
 
-// tableFor подбирает таблицу частот с числом записей, равным числу активных
-// стейтов канала (так PCPU с 20 стейтами находит voltage-states5-sram с 20
-// записями, MCPU с 15 — voltage-states22-sram).
+// tableFor picks the frequency table whose entry count matches the
+// channel's active state count (so PCPU with 20 states finds
+// voltage-states5-sram with 20 entries, MCPU with 15 finds
+// voltage-states22-sram).
 func (r *IOReport) tableFor(states int) []float64 {
 	for _, t := range r.tables {
 		if len(t) == states {
@@ -362,8 +364,8 @@ func (r *IOReport) tableFor(states int) []float64 {
 	return nil
 }
 
-// weightedFreq — средневзвешенная частота: residency-дельты активных
-// стейтов × частоты стейтов из таблицы device tree.
+// weightedFreq computes the weighted-average frequency: active-state
+// residency deltas × state frequencies from the device-tree table.
 func weightedFreq(deltas []uint64, table []float64) float64 {
 	n := len(deltas)
 	if len(table) < n {
@@ -380,10 +382,10 @@ func weightedFreq(deltas []uint64, table []float64) float64 {
 	return sum / weight
 }
 
-// readFreqTables собирает таблицы частот CPU-кластеров из IODeviceTree
-// (узел pmgr, свойства voltage-statesN-sram): little-endian пары uint32
-// (частота, напряжение). Имена свойств зависят от поколения чипа (M1:
-// states1/5, M5 Pro: states5/22/23), поэтому перебираем все N.
+// readFreqTables collects CPU cluster frequency tables from IODeviceTree
+// (pmgr node, voltage-statesN-sram properties): little-endian uint32 pairs
+// (frequency, voltage). Property names depend on the chip generation (M1:
+// states1/5, M5 Pro: states5/22/23), so we scan every N.
 func readFreqTables() [][]float64 {
 	var tables [][]float64
 	for n := 0; n < 32; n++ {
@@ -409,10 +411,10 @@ func readFreqTable(prop string) []float64 {
 	for off := 0; off+8 <= n; off += 8 {
 		hz := float64(uint32(buf[off]) | uint32(buf[off+1])<<8 |
 			uint32(buf[off+2])<<16 | uint32(buf[off+3])<<24)
-		if hz <= 1 { // заглушки-единицы в некоторых таблицах — не частоты
+		if hz <= 1 { // placeholder 1s in some tables aren't real frequencies
 			continue
 		}
-		// единицы зависят от чипа: Гц (M1) или кГц (M5) — нормализуем в Гц
+		// units depend on the chip: Hz (M1) or kHz (M5) — normalize to Hz
 		for hz < 1e8 {
 			hz *= 1000
 		}

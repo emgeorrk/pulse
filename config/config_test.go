@@ -46,7 +46,7 @@ func TestTogglePin(t *testing.T) {
 	if s.Get().IsPinned("temp.cpu") {
 		t.Error("temp.cpu should be unpinned")
 	}
-	// порядок пиннинга сохраняется
+	// pin order is preserved
 	s.TogglePin("a")
 	s.TogglePin("b")
 	got := s.Get().Pinned

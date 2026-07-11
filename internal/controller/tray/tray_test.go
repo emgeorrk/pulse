@@ -4,8 +4,8 @@ package tray
 
 import "testing"
 
-// prettyModel не должен дублировать чип (он показан отдельной строкой System)
-// и обязан возвращать имя как есть, если формат product-name незнаком.
+// prettyModel must not duplicate the chip name (shown on its own System
+// line) and must return the name as-is if the product-name format is unfamiliar.
 func TestPrettyModel(t *testing.T) {
 	cases := []struct {
 		name, chip, want string
