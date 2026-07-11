@@ -13,7 +13,10 @@ void nativeStart(void);
 
 void setIcon(const char* iconBytes, int length, bool template);
 void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool template);
+void clearMenuItemIcon(int menuId);
 void setTitle(char* title);
+void registerTitleIcon(char* key, const char* iconBytes, int length);
+void setTitleParts(char* encoded);
 void setTooltip(char* tooltip);
 void setRemovalAllowed(bool allowed);
 void add_or_update_menu_item(int menuId, int parentMenuId, char* title, char* tooltip, short disabled, short checked, short isCheckable);

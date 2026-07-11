@@ -38,13 +38,57 @@ func TestEveryMetricRendersInBar(t *testing.T) {
 	for _, snap := range []entity.Snapshot{{}, sampleSnapshot()} {
 		for _, g := range buildGroups(hw, fullCaps()) {
 			for _, m := range g.metrics {
-				if got := m.barText(snap, cfg); got == "" {
-					t.Errorf("%s: empty barText", m.id)
+				if got := m.barValue(snap, cfg); got == "" {
+					t.Errorf("%s: empty barValue", m.id)
 				}
 				if got := m.menu(snap, cfg); got == "" {
 					t.Errorf("%s: empty menu", m.id)
 				}
 			}
+		}
+	}
+}
+
+// The bar prefix matrix: text mode uses the tag, emoji mode keeps the
+// qualifier next to the group emoji, gnome mode swaps to icon keys and
+// drops the qualifier when the icon itself is metric-specific.
+func TestBarPartStyles(t *testing.T) {
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+	snap := sampleSnapshot()
+
+	text := config.Config{BarLabels: config.BarText}
+	emoji := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualEmoji}
+	gnome := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualGnome}
+
+	cases := []struct {
+		id       entity.MetricID
+		cfg      config.Config
+		wantIcon string
+		prefix   string // expected text before the bar value
+	}{
+		{"cpu.total", text, "", "CPU "},
+		{"cpu.total", emoji, "", "⚙️ "},
+		{"cpu.total", gnome, "cpu", " "},
+		{"net.down", text, "", "↓"},
+		{"net.down", emoji, "", "📶 ↓"},
+		{"net.down", gnome, "network-download", " "}, // own icon → no ↓
+		{"swap.used", text, "", "SW "},
+		{"swap.used", emoji, "", "🧠 SW "},
+		{"swap.used", gnome, "memory", " SW "}, // group icon → keep SW
+		{"mem.used", text, "", ""},
+		{"mem.used", emoji, "", "🧠 "},
+	}
+	for _, tc := range cases {
+		m, ok := tr.bar[tc.id]
+		if !ok {
+			t.Fatalf("%s missing from the bar map", tc.id)
+		}
+		icon, got := m.barPart(snap, tc.cfg)
+		if icon != tc.wantIcon {
+			t.Errorf("%s (%s/%s): icon = %q, want %q", tc.id, tc.cfg.BarLabels, tc.cfg.VisualStyle, icon, tc.wantIcon)
+		}
+		if want := tc.prefix + m.barValue(snap, tc.cfg); got != want {
+			t.Errorf("%s (%s/%s): text = %q, want %q", tc.id, tc.cfg.BarLabels, tc.cfg.VisualStyle, got, want)
 		}
 	}
 }

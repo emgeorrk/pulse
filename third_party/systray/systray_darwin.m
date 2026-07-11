@@ -227,6 +227,8 @@ static const CGFloat kPulseTrailingPad = 14;
   NSStatusItem *statusItem;
   NSMenu *menu;
   NSCondition* cond;
+  // PATCH(pulse): template images for inline title icons, key → NSImage.
+  NSMutableDictionary<NSString*, NSImage*> *titleIcons;
 }
 
 @synthesize window = _window;
@@ -312,6 +314,46 @@ static const CGFloat kPulseTrailingPad = 14;
 
 - (void)setTitle:(NSString *)title {
   statusItem.button.title = title;
+  [self updateTitleButtonStyle];
+}
+
+// PATCH(pulse): attributed titles with inline template icons. The status
+// item font stays the source of truth; icons are drawn as text attachments
+// sized to the font and vertically centered on the cap-height band, so they
+// sit on the same baseline as the values next to them.
+- (void)registerTitleIcon:(NSArray*)keyAndImage {
+  if (titleIcons == nil) {
+    titleIcons = [NSMutableDictionary dictionary];
+  }
+  titleIcons[[keyAndImage objectAtIndex:0]] = [keyAndImage objectAtIndex:1];
+}
+
+- (void)setTitleParts:(NSString *)encoded {
+  NSFont *font = statusItem.button.font;
+  if (font == nil) {
+    font = [NSFont menuBarFontOfSize:0];
+  }
+  // Slightly taller than cap height: the glyphs are full-square symbolic
+  // icons and read too small when clamped to the caps band.
+  CGFloat side = ceil(font.capHeight * 1.4);
+  CGFloat drop = floor((side - font.capHeight) / 2.0);
+  NSDictionary *textAttrs = @{NSFontAttributeName : font};
+  NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
+  for (NSString *part in [encoded componentsSeparatedByString:@"\x1e"]) {
+    NSArray<NSString*> *fields = [part componentsSeparatedByString:@"\x1f"];
+    NSImage *icon = fields.count > 0 && fields[0].length > 0 ? titleIcons[fields[0]] : nil;
+    if (icon != nil) {
+      NSTextAttachment *att = [[NSTextAttachment alloc] init];
+      att.image = icon;
+      att.bounds = CGRectMake(0, -drop, side, side);
+      [out appendAttributedString:[NSAttributedString attributedStringWithAttachment:att]];
+    }
+    if (fields.count > 1 && fields[1].length > 0) {
+      [out appendAttributedString:[[NSAttributedString alloc] initWithString:fields[1]
+                                                                  attributes:textAttrs]];
+    }
+  }
+  statusItem.button.attributedTitle = out;
   [self updateTitleButtonStyle];
 }
 
@@ -456,6 +498,15 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
   menuItem.image = image;
 }
 
+// PATCH(pulse): live style switching needs a way back to no icon;
+// setMenuItemIcon can't express it (nil in the NSArray literal would throw).
+- (void) clearMenuItemIcon:(NSNumber*)menuId {
+  NSMenuItem* menuItem = find_menu_item(menu, menuId);
+  if (menuItem != NULL) {
+    menuItem.image = nil;
+  }
+}
+
 - (void)show_menu
 {
   // Attach the menu and synthesize a click so AppKit positions it natively,
@@ -590,6 +641,34 @@ void setTitle(char* ctitle) {
                                              encoding:NSUTF8StringEncoding];
   free(ctitle);
   runInMainThread(@selector(setTitle:), (id)title);
+}
+
+// PATCH(pulse): inline title icons.
+void registerTitleIcon(char* key, const char* iconBytes, int length) {
+  NSString* nsKey = [[NSString alloc] initWithCString:key
+                                             encoding:NSUTF8StringEncoding];
+  free(key);
+  NSData* buffer = [NSData dataWithBytes:iconBytes length:length];
+  @autoreleasepool {
+    NSImage *image = [[NSImage alloc] initWithData:buffer];
+    if (image == nil) {
+      return;
+    }
+    image.template = YES;
+    runInMainThread(@selector(registerTitleIcon:), @[nsKey, image]);
+  }
+}
+
+void setTitleParts(char* cencoded) {
+  NSString* encoded = [[NSString alloc] initWithCString:cencoded
+                                               encoding:NSUTF8StringEncoding];
+  free(cencoded);
+  runInMainThread(@selector(setTitleParts:), (id)encoded);
+}
+
+void clearMenuItemIcon(int menuId) {
+  NSNumber *mId = [NSNumber numberWithInt:menuId];
+  runInMainThread(@selector(clearMenuItemIcon:), (id)mId);
 }
 
 void setTooltip(char* ctooltip) {

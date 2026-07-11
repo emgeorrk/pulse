@@ -109,6 +109,30 @@ func SetTitle(title string) {
 	C.setTitle(C.CString(title))
 }
 
+// PATCH(pulse): attributed status-item titles with inline template icons.
+
+// RegisterTitleIcon registers a template image (PNG bytes, glyph + alpha)
+// under key for use in SetTitleParts. Register each icon once, before the
+// first SetTitleParts call that references it.
+func RegisterTitleIcon(key string, png []byte) {
+	if len(png) == 0 {
+		return
+	}
+	cstr := (*C.char)(unsafe.Pointer(&png[0]))
+	C.registerTitleIcon(C.CString(key), cstr, (C.int)(len(png)))
+}
+
+// SetTitleParts sets the status item title as attributed text where each
+// part may start with a registered template icon.
+func SetTitleParts(parts []TitlePart) {
+	C.setTitleParts(C.CString(encodeTitleParts(parts)))
+}
+
+// ClearIcon removes the icon of a menu item.
+func (item *MenuItem) ClearIcon() {
+	C.clearMenuItemIcon(C.int(item.id))
+}
+
 // SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
 // only available on Mac and Windows.
 func SetTooltip(tooltip string) {

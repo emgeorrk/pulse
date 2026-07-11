@@ -21,6 +21,24 @@ const (
 	Fahrenheit TempUnit = "F"
 )
 
+// VisualStyle picks which visuals represent metrics: emoji or the
+// GNOME-style monochrome icons (from Vitals).
+type VisualStyle string
+
+const (
+	VisualEmoji VisualStyle = "emoji"
+	VisualGnome VisualStyle = "gnome"
+)
+
+// BarLabelStyle picks what precedes each pinned value in the menu bar:
+// text tags ("CPU", "MEM"…) or the chosen visual.
+type BarLabelStyle string
+
+const (
+	BarText   BarLabelStyle = "text"
+	BarVisual BarLabelStyle = "visual"
+)
+
 type Config struct {
 	IntervalSec   int               `json:"interval_sec"`
 	TempUnit      TempUnit          `json:"temp_unit"`
@@ -28,6 +46,8 @@ type Config struct {
 	Pinned        []entity.MetricID `json:"pinned"`        // order = order in the menu bar
 	ShowSparkline bool              `json:"show_sparkline"`
 	StartAtLogin  bool              `json:"start_at_login"`
+	VisualStyle   VisualStyle       `json:"visual_style"`
+	BarLabels     BarLabelStyle     `json:"bar_labels"`
 }
 
 func defaults() Config {
@@ -37,6 +57,8 @@ func defaults() Config {
 		DecimalBytes:  false,
 		Pinned:        []entity.MetricID{"cpu.total", "mem.used"},
 		ShowSparkline: true,
+		VisualStyle:   VisualEmoji,
+		BarLabels:     BarText,
 	}
 }
 
@@ -89,6 +111,12 @@ func Load(path string) *Store {
 	}
 	if c.TempUnit != Fahrenheit {
 		c.TempUnit = Celsius
+	}
+	if c.VisualStyle != VisualGnome {
+		c.VisualStyle = VisualEmoji
+	}
+	if c.BarLabels != BarVisual {
+		c.BarLabels = BarText
 	}
 	s.c = c
 	return s

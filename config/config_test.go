@@ -12,8 +12,32 @@ func TestLoadMissingFileGivesDefaults(t *testing.T) {
 	if c.IntervalSec != 2 || c.TempUnit != Celsius || !c.ShowSparkline {
 		t.Errorf("defaults broken: %+v", c)
 	}
+	if c.VisualStyle != VisualEmoji || c.BarLabels != BarText {
+		t.Errorf("style defaults broken: %+v", c)
+	}
 	if !c.IsPinned("cpu.total") || !c.IsPinned("mem.used") {
 		t.Errorf("default pins broken: %v", c.Pinned)
+	}
+}
+
+// A config written by an older version (or hand-edited to junk) must
+// normalize the style fields instead of leaking unknown values into the UI.
+func TestLoadNormalizesStyleFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := Load(path).Get()
+	if c.VisualStyle != VisualEmoji || c.BarLabels != BarText {
+		t.Errorf("junk style values not normalized: %+v", c)
+	}
+
+	if err := os.WriteFile(path, []byte(`{"interval_sec":2,"visual_style":"gnome","bar_labels":"visual"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c = Load(path).Get()
+	if c.VisualStyle != VisualGnome || c.BarLabels != BarVisual {
+		t.Errorf("valid style values not kept: %+v", c)
 	}
 }
 
