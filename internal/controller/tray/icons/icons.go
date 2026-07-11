@@ -1,7 +1,8 @@
 // Package icons embeds the monochrome GNOME-style metric icons (from the
-// Vitals GNOME Shell extension, see README.md) as 32x32 template PNGs.
-// They are rendered by macOS as template images: only the alpha channel
-// matters, so the glyphs adapt to light/dark menu bars automatically.
+// Vitals GNOME Shell extension, see README.md) as 64x64 PNGs. Only the
+// alpha channel matters: menu items draw them as macOS template images,
+// and the menu bar title tints them to the text color at draw time, so the
+// glyphs adapt to light/dark menu bars automatically.
 package icons
 
 import "embed"

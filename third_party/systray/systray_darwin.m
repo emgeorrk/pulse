@@ -317,10 +317,10 @@ static const CGFloat kPulseTrailingPad = 14;
   [self updateTitleButtonStyle];
 }
 
-// PATCH(pulse): attributed titles with inline template icons. The status
-// item font stays the source of truth; icons are drawn as text attachments
-// sized to the font and vertically centered on the cap-height band, so they
-// sit on the same baseline as the values next to them.
+// PATCH(pulse): attributed titles with inline icons. The status item font
+// stays the source of truth; icons are drawn as text attachments sized to
+// the font and vertically centered on the cap-height band, so they sit on
+// the same baseline as the values next to them.
 - (void)registerTitleIcon:(NSArray*)keyAndImage {
   if (titleIcons == nil) {
     titleIcons = [NSMutableDictionary dictionary];
@@ -328,14 +328,43 @@ static const CGFloat kPulseTrailingPad = 14;
   titleIcons[[keyAndImage objectAtIndex:0]] = [keyAndImage objectAtIndex:1];
 }
 
+// Well above cap height: the glyphs are full-square symbolic icons and read
+// too small when clamped to the caps band; 1.8 × cap height ≈ 17 pt with the
+// default menu bar font, in line with typical status-item icons.
+static const CGFloat kPulseTitleIconScale = 1.8;
+
+// tintedTitleIcon fills the glyph's alpha with labelColor at draw time, so
+// the icon follows the menu bar's effective appearance (light/dark wallpaper,
+// theme switches) the same way the title text does. The text system ignores
+// NSImage.template on attachments, so template rendering can't do this here.
+// NSImage caches one representation per appearance, so a theme change just
+// re-runs the handler.
+static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
+  return [NSImage imageWithSize:NSMakeSize(side, side)
+                        flipped:NO
+                 drawingHandler:^BOOL(NSRect dst) {
+    [icon drawInRect:dst
+            fromRect:NSZeroRect
+           operation:NSCompositingOperationSourceOver
+            fraction:1.0];
+    // labelColor is ~15% translucent; rasterized without the vibrancy that
+    // neighboring template status icons get, that reads gray on a light
+    // menu bar. Resolve it under the current appearance and force it solid.
+    NSColor *tint = [[NSColor.labelColor
+        colorUsingColorSpace:NSColorSpace.sRGBColorSpace]
+        colorWithAlphaComponent:1.0];
+    [tint set];
+    NSRectFillUsingOperation(dst, NSCompositingOperationSourceIn);
+    return YES;
+  }];
+}
+
 - (void)setTitleParts:(NSString *)encoded {
   NSFont *font = statusItem.button.font;
   if (font == nil) {
     font = [NSFont menuBarFontOfSize:0];
   }
-  // Slightly taller than cap height: the glyphs are full-square symbolic
-  // icons and read too small when clamped to the caps band.
-  CGFloat side = ceil(font.capHeight * 1.4);
+  CGFloat side = ceil(font.capHeight * kPulseTitleIconScale);
   CGFloat drop = floor((side - font.capHeight) / 2.0);
   NSDictionary *textAttrs = @{NSFontAttributeName : font};
   NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
@@ -344,7 +373,7 @@ static const CGFloat kPulseTrailingPad = 14;
     NSImage *icon = fields.count > 0 && fields[0].length > 0 ? titleIcons[fields[0]] : nil;
     if (icon != nil) {
       NSTextAttachment *att = [[NSTextAttachment alloc] init];
-      att.image = icon;
+      att.image = tintedTitleIcon(icon, side);
       att.bounds = CGRectMake(0, -drop, side, side);
       [out appendAttributedString:[NSAttributedString attributedStringWithAttachment:att]];
     }
@@ -643,7 +672,8 @@ void setTitle(char* ctitle) {
   runInMainThread(@selector(setTitle:), (id)title);
 }
 
-// PATCH(pulse): inline title icons.
+// PATCH(pulse): inline title icons. Only the alpha channel is used — the
+// glyph is tinted at draw time (see tintedTitleIcon), not template-rendered.
 void registerTitleIcon(char* key, const char* iconBytes, int length) {
   NSString* nsKey = [[NSString alloc] initWithCString:key
                                              encoding:NSUTF8StringEncoding];
@@ -654,7 +684,6 @@ void registerTitleIcon(char* key, const char* iconBytes, int length) {
     if (image == nil) {
       return;
     }
-    image.template = YES;
     runInMainThread(@selector(registerTitleIcon:), @[nsKey, image]);
   }
 }

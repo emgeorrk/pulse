@@ -3,9 +3,9 @@
 The SVG sources in `svg/` are the "GNOME" icon theme of the
 [Vitals](https://github.com/corecoding/Vitals) GNOME Shell extension
 (`icons/gnome/*-symbolic.svg`), copied verbatim. The PNGs in `png/` are
-rendered from them by `scripts/gen-icons.sh` (32x32, glyph + alpha) and are
-what the app embeds; macOS draws them as template images, so only the alpha
-channel is used.
+rendered from them by `scripts/gen-icons.sh` (64x64, glyph + alpha) and are
+what the app embeds; the app draws them template-rendered (menu items) or
+tinted to the menu bar text color (title), so only the alpha channel is used.
 
 ## Provenance and license
 

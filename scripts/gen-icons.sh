@@ -3,14 +3,15 @@
 # in internal/controller/tray/icons/svg/. The PNGs are committed, so this
 # only needs to run when the SVG set changes.
 #
-# Output is 32x32 (black/#222 + alpha) — rendered at 16 pt by the app, i.e.
-# a @2x asset. macOS template rendering only uses the alpha channel.
+# Output is 64x64 (black/#222 + alpha) — drawn at ~17 pt by the app, i.e. a
+# @2x asset with headroom. Only the alpha channel is used: the app tints the
+# glyph to match the menu bar text.
 set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 svg_dir="$root/internal/controller/tray/icons/svg"
 png_dir="$root/internal/controller/tray/icons/png"
-size=32
+size=64
 
 mkdir -p "$png_dir"
 
