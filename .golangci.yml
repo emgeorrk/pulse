@@ -70,7 +70,6 @@ linters:
     errorlint:
       errorf: true
     exhaustive:
-      check-generated: false
       default-signifies-exhaustive: true
     funlen:
       lines: 65
