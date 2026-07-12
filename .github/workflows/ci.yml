@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # CGO sensor code links IOKit/Foundation/Mach — it only builds on a real Mac.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # -short skips the integration tests that read real hardware, keeping the
+      # run deterministic across runner generations (see CLAUDE.md).
+      - name: Test
+        run: CGO_ENABLED=1 go test -short ./...
+
+  lint:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          # golangci-lint-action manages its own cache; avoid a double cache.
+          cache: false
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Matches the `version: "2"` schema in .golangci.yml.
+          version: v2.12.2

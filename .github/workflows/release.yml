@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Native arm64 build on Apple Silicon runners (macos-14+ are arm64).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version into Info.plist
+        # Throwaway CI checkout — this edit is never committed.
+        run: |
+          V='${{ steps.version.outputs.version }}'
+          /usr/libexec/PlistBuddy \
+            -c "Set :CFBundleVersion $V" \
+            -c "Set :CFBundleShortVersionString $V" \
+            build/darwin/Info.plist
+
+      - name: Build, bundle, ad-hoc sign
+        run: make sign
+
+      - name: Package .app
+        id: package
+        run: |
+          V='${{ steps.version.outputs.version }}'
+          ZIP="Pulse-$V-arm64.zip"
+          # ditto preserves the code signature and resource forks; plain zip does not.
+          ditto -c -k --keepParent bin/Pulse.app "$ZIP"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        run: |
+          cat > notes.md <<'EOF'
+          A native macOS menu bar system monitor. **Apple Silicon (arm64) only.**
+
+          ## Install
+
+          1. Download the `.zip` below and unzip it.
+          2. Move `Pulse.app` to `/Applications`.
+          3. Remove the quarantine flag, then open it:
+
+             ```sh
+             xattr -dr com.apple.quarantine /Applications/Pulse.app
+             open /Applications/Pulse.app
+             ```
+
+          Pulse looks in your menu bar — it has no Dock icon. Quit via "Quit Pulse"
+          in its dropdown.
+
+          > The `xattr` step is needed because the build is **ad-hoc signed, not
+          > notarized** (no paid Apple Developer account). It is not malware — the
+          > full source is in this repo; you can also build it yourself with
+          > `make run`.
+
+          ## Notes
+
+          - **Apple Silicon only.** Intel Macs are not supported by this binary;
+            build from source instead. The Intel sensor paths were written from
+            references and have **not been verified on real Intel hardware**.
+          - Requires macOS 12 (Monterey) or newer.
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+            --title "Pulse $GITHUB_REF_NAME" \
+            --notes-file notes.md
