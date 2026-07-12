@@ -32,6 +32,10 @@ const (
 	metricHottestTemperature = "temp.hottest"
 	metricNetworkDownload    = "net.down"
 	metricDiskFree           = "disk.free"
+	// Battery charging marks: a color emoji for the emoji icon set, a
+	// monochrome text glyph for the gnome set (see chargeMark).
+	chargeMarkEmoji = " ⚡"
+	chargeMarkGnome = " ↯"
 )
 
 // metric is one row in the dropdown. bar defines a compact value for the
@@ -347,6 +351,19 @@ func powerGroup() group {
 	}
 }
 
+// chargeMark is the charging indicator appended to the battery aggregate.
+// The colored ⚡ emoji matches the emoji icon set; the gnome set uses
+// monochrome template icons tinted to the menu text color, so it gets a
+// text-glyph bolt (↯) that tints the same way instead of a color emoji that
+// ignores the tint and stands out.
+func chargeMark(style config.VisualStyle) string {
+	if style == config.VisualGnome {
+		return chargeMarkGnome
+	}
+
+	return chargeMarkEmoji
+}
+
 func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional battery fields require independent fallbacks.
 	return group{
 		emoji: "🔋",
@@ -359,7 +376,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 
 			state := ""
 			if s.Battery.Charging {
-				state = " ⚡"
+				state = chargeMark(c.VisualStyle)
 			}
 
 			return format.Percent(s.Battery.Percent) + state

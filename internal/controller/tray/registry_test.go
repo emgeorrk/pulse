@@ -235,3 +235,28 @@ func chargingSnapshot() entity.Snapshot {
 
 	return s
 }
+
+// The charging mark must match the icon set: a monochrome text glyph for the
+// gnome (template-icon) style, the color emoji otherwise.
+func TestChargeMark(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		style config.VisualStyle
+		want  string
+	}{
+		{name: "gnome uses monochrome bolt", style: config.VisualGnome, want: chargeMarkGnome},
+		{name: "emoji uses color bolt", style: config.VisualEmoji, want: chargeMarkEmoji},
+		{name: "empty style defaults to emoji", style: "", want: chargeMarkEmoji},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := chargeMark(tt.style); got != tt.want {
+				t.Errorf("chargeMark(%q) = %q, want %q", tt.style, got, tt.want)
+			}
+		})
+	}
+}
