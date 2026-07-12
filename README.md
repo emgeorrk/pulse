@@ -1,8 +1,15 @@
 # Pulse
 
-A native macOS menu bar system monitor — a *feature* (not code) equivalent of
-the GNOME extension [Vitals](https://github.com/corecoding/Vitals). Go + CGO, no
-sudo, no `powermetrics`.
+**See what your Mac is doing — right from the menu bar.**
+
+Pulse puts your Mac's vital signs at the top of the screen: how busy the
+processor is, how much memory is in use, how hot it's running, fan speed,
+network and disk activity, battery health, and more. It's tiny, native, and
+free — no window to manage, no Dock icon, no account.
+
+It's a macOS take on the popular GNOME extension
+[Vitals](https://github.com/corecoding/Vitals) — the same idea, rebuilt from
+scratch for the Mac.
 
 <p align="left">
   <a href="https://github.com/emgeorrk/pulse/actions/workflows/ci.yml"><img src="https://github.com/emgeorrk/pulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -15,9 +22,30 @@ sudo, no `powermetrics`.
   <img src="docs/screenshot.png" alt="Pulse menu bar dropdown showing CPU, memory, temperature, and other live metrics" width="340">
 </p>
 
-Pulse lives in your menu bar: pinned metrics render inline, and the dropdown
-lists every group with a live aggregate. No Dock icon, no window — quit from the
-dropdown.
+## How it works
+
+- **Pin what matters.** Pick any metric and it shows live, right in the menu
+  bar next to the clock.
+- **Click for the full picture.** The dropdown lists every group — CPU, memory,
+  temperature, and so on — each with a live summary.
+- **Stays out of the way.** No Dock icon, no floating window. Quit from the
+  dropdown whenever you like.
+
+## What it shows
+
+- **CPU** — how hard the processor is working, overall and per core, with a
+  little live graph in the menu bar
+- **Memory** — how much RAM is in use, plus swap
+- **Temperature** — how hot the chip and its parts are running
+- **Fans** — fan speed (hidden on fanless Macs like the MacBook Air)
+- **Network** — upload and download speeds, plus totals
+- **Disk** — free space and read/write speeds
+- **GPU** — how busy the graphics are
+- **Power** — how many watts the CPU, GPU, and Neural Engine are drawing
+- **Battery** — charge, health, cycles, temperature, and time remaining
+
+If your Mac doesn't have a particular sensor, Pulse simply hides that section —
+it never gets in the way.
 
 ## Install
 
@@ -29,120 +57,83 @@ ln -sfn "$(brew --prefix)/opt/pulse/Pulse.app" /Applications/Pulse.app
 open /Applications/Pulse.app
 ```
 
-Pulse is compiled from source, so macOS never quarantines it — no Gatekeeper
-prompt, no flags. The second line links it into `/Applications`; `brew upgrade
-pulse` keeps it current.
+Homebrew builds Pulse on your own machine, so macOS opens it without any
+security warnings. The second line adds it to your Applications folder, and
+`brew upgrade pulse` keeps it up to date.
 
-### Download (Apple Silicon)
+### Download the app (Apple Silicon Macs)
 
-1. Grab the latest `Pulse-<version>-arm64.zip` from the
+1. Download `Pulse-<version>-arm64.zip` from the
    [Releases](https://github.com/emgeorrk/pulse/releases/latest) page and unzip
    it.
-2. Move `Pulse.app` to `/Applications`.
-3. Clear the quarantine flag, then open it:
+2. Move `Pulse.app` into your **Applications** folder.
+3. Open **Terminal**, paste the two lines below, and press Return:
 
    ```sh
    xattr -dr com.apple.quarantine /Applications/Pulse.app
    open /Applications/Pulse.app
    ```
 
-The prebuilt `.app` is ad-hoc signed but not notarized, so a downloaded copy is
-quarantined; the `xattr` step strips that so Gatekeeper lets it run.
+The downloaded app isn't signed by Apple, so macOS blocks it at first. The first
+line tells macOS the app is safe; the second one launches it.
 
-> **Apple Silicon only** for the prebuilt `.zip` (it's arm64). On an Intel Mac,
-> use Homebrew or build from source — but note the Intel sensor paths are
-> unverified (see [Platform paths](#platform-paths)).
-
-### Build from source
-
-Requires macOS 12+, the Xcode command line tools, and Go 1.26.
-
-```sh
-make run    # build Pulse.app, ad-hoc sign it, and launch it
-make once   # check sensors without the UI: one metrics frame to stdout
-make test   # unit tests
-```
-
-Locally built apps aren't quarantined, so no `xattr` step is needed.
-`PULSE_DEBUG=1 ./bin/pulse -once` additionally prints the IOReport channels —
-useful when porting to a new chip generation.
+> This ready-made download is for **Apple Silicon** Macs (M1 and newer). On an
+> older Intel Mac, use Homebrew or build it yourself.
 
 ### Launch at login
 
-Turn on **Launch at login** in Pulse's Settings; it installs a LaunchAgent.
-Settings live in `~/Library/Application Support/pulse/config.json`.
+Open Pulse's **Settings** and turn on **Launch at login** — it'll start
+automatically every time you sign in.
 
-## Features
+## Settings
 
-- **CPU**: total load + per-core, history sparkline (▁▂▄▇) in the menu bar,
-  per-cluster frequency (IOReport performance states × frequency tables from
-  the device tree)
-- **Memory**: used / available / physical / swap (Activity Monitor formula)
-- **Temperatures**: all chip sensors + CPU/GPU/hottest aggregates
-  (Apple Silicon — HID sensor hub; Intel — SMC keys)
-- **Fans**: RPM + % of max (SMC; hidden on fanless models)
-- **Voltage**: PMU sensors (Apple Silicon)
-- **Network**: total ↓/↑ and per-interface, session traffic
-- **Disk**: volume usage, read/write speeds, totals since boot
-- **GPU**: utilization (IOAccelerator)
-- **Power**: CPU/GPU/ANE in watts (IOReport Energy Model)
-- **Battery**: charge, health, cycles, temperature, voltage, watts, time
+Everything is in the dropdown menu:
 
-## UI (modeled on Vitals)
+- **Update speed** — refresh every 1, 2, 3, or 5 seconds
+- **Temperature** — °C or °F
+- **Data units** — GB or GiB
+- **Menu bar graph** — show or hide the little CPU sparkline
+- **Launch at login**
 
-- Pinned metrics show inline in the menu bar; clicking a metric in the dropdown
-  (checkbox) pins/unpins it, and pin order matches bar order
-- Groups in the dropdown show a live aggregate right in the header
-- **Settings**: interval (1/2/3/5 s, no restart needed), °C/°F, GiB/GB,
-  sparkline, launch at login
-- A sensor unavailable on this hardware disables its own group, not the whole
-  app
+## Questions
 
-## Structure
+**Does it need my password or admin rights?** No. Pulse reads everything from
+regular user space — it never asks for a password.
 
-Layers inspired by [go-clean-template](https://github.com/evrone/go-clean-template):
-`internal/sensors` (data sources: Mach, getifaddrs, IOKit, SMC, HID, IOReport)
-→ `internal/usecase` (sampling, deltas, aggregates) →
-`internal/controller/tray` (systray UI, metric registry); domain types live in
-`internal/entity`, and Vitals-style formatting lives in `pkg/format`.
-[CLAUDE.md](CLAUDE.md) is the as-built architecture guide.
+**Will it slow my Mac down?** No. It wakes up a few times a second, reads the
+sensors, and goes back to sleep. The footprint is tiny.
 
-## Platform paths
+**Intel Macs?** Pulse runs, but the Intel sensor readings (temperature and fans)
+haven't been tested on real Intel hardware yet, so some of those numbers may be
+missing or off. Apple Silicon is fully supported.
 
-`entity.HWInfo.IsAppleSilicon` is the branch point; fanless models (MacBook Air)
-have no fan sensors and hide that section.
+## For developers
 
-| Metric | Apple Silicon | Intel |
-|---|---|---|
-| Temperatures | `IOHIDEventSystemClient` (0xff00/5), GPU fallback via SMC `Tg*` | SMC keys (TC0P…) — **untested** |
-| Voltage | HID (0xff08/3) | — |
-| Fans | SMC `F%dAc`, type `flt ` LE | SMC, type `fpe2` BE — **untested** |
-| Power | IOReport Energy Model | — |
-| CPU frequency | IOReport perf states | — |
+Pulse is written in Go with CGO, reading Apple's IOKit, SMC, HID, and IOReport
+interfaces directly — no `sudo`, no `powermetrics`.
 
-The Intel paths (SMC sp78 temperatures, fpe2 fans) were written from references
-(iSMC, VirtualSMC docs) and have **not been verified on real Intel hardware**.
+Build from source (needs macOS 12+, Xcode command line tools, and Go 1.26):
 
-## Tested on
+```sh
+make run    # build the app, sign it, and launch it
+make once   # print one metrics frame to the terminal (no UI)
+make test   # run the tests
+```
 
-| Model | Chip | macOS | Features |
-|---|---|---|---|
-| Mac17,8 (MacBook Pro) | Apple M5 Pro, 18 cores | 26.5.2 | everything except the Intel paths; GPU temperature verified via SMC `Tg*` |
+Architecture, conventions, and the Apple Silicon vs. Intel sensor paths are
+documented in [CLAUDE.md](CLAUDE.md).
 
-## Contributing
+Verified on a Mac17,8 MacBook Pro (Apple M5 Pro, 18 cores) running macOS 26.5.2.
+Everything except the Intel-only paths has been tested there. If you confirm a
+feature on other hardware, a note in a PR is welcome.
 
-CGO is mandatory (the sensor layer links IOKit / Foundation / Mach), so all
-sensor code is darwin-only and must build on a real Mac. Before opening a PR:
+Before opening a pull request:
 
 ```sh
 make test   # unit tests
-make lint   # golangci-lint (strict; see .golangci.yml)
+make lint   # golangci-lint (strict)
 make vet    # go vet
 ```
-
-Conventions (sentinel errors, table-driven + gomock tests, capability gating)
-are documented in [CLAUDE.md](CLAUDE.md). If you verify a feature on new
-hardware, record the model + chip in **Tested on**.
 
 ## License
 
