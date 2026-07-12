@@ -370,11 +370,14 @@ func heartbeatFrames() []heartbeatFrame {
 	}
 }
 
-// animate beats the heart in the title until the first snapshot arrives.
-// It only checks for that at the end of a full cycle, so a beat is never
-// cut short; render skips the title while loading is set.
+// animate beats the heart in the title until the first snapshot arrives and
+// at least minBeats full cycles have played. It only checks at the end of a
+// full cycle, so a beat is never cut short; render skips the title while
+// loading is set.
 func (t *Tray) animate(ctx context.Context) {
-	for {
+	const minBeats = 3
+
+	for beats := 1; ; beats++ {
 		for _, f := range heartbeatFrames() {
 			systray.SetTitle(f.frame)
 
@@ -386,7 +389,7 @@ func (t *Tray) animate(ctx context.Context) {
 		}
 
 		t.mu.Lock()
-		done := t.seen
+		done := t.seen && beats >= minBeats
 		t.loading = !done
 		t.mu.Unlock()
 
