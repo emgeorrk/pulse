@@ -80,5 +80,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
-            --title "Pulse $GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
