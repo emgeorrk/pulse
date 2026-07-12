@@ -50,6 +50,20 @@ jobs:
 
           ## Install
 
+          ### Homebrew (recommended)
+
+          ```sh
+          brew install emgeorrk/tap/pulse
+          ln -sfn "$(brew --prefix)/opt/pulse/Pulse.app" /Applications/Pulse.app
+          open /Applications/Pulse.app
+          ```
+
+          Compiled from source, so macOS never quarantines it — no Gatekeeper
+          prompt, no flags. The second line links it into /Applications; update
+          later with `brew upgrade pulse`.
+
+          ### Manual download
+
           1. Download the `.zip` below and unzip it.
           2. Move `Pulse.app` to `/Applications`.
           3. Remove the quarantine flag, then open it:
@@ -62,10 +76,10 @@ jobs:
           Pulse looks in your menu bar — it has no Dock icon. Quit via "Quit Pulse"
           in its dropdown.
 
-          > The `xattr` step is needed because the build is **ad-hoc signed, not
-          > notarized** (no paid Apple Developer account). It is not malware — the
-          > full source is in this repo; you can also build it yourself with
-          > `make run`.
+          > The prebuilt `.zip` is **ad-hoc signed, not notarized** (no paid Apple
+          > Developer account), so a downloaded copy is quarantined and needs the
+          > `xattr` step. It is not malware — the full source is in this repo, and
+          > the Homebrew formula above avoids the step by building locally.
 
           ## Notes
 
@@ -82,3 +96,24 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
+
+      # Bumps the source-tarball url + sha256 in the Homebrew formula so
+      # `brew upgrade` sees the release. Needs a PAT (HOMEBREW_TAP_TOKEN) with
+      # Contents:write on the tap; the built-in GITHUB_TOKEN cannot push to
+      # another repository. GitHub serves the tag tarball on demand, so its
+      # sha256 is computed here from the freshly pushed tag.
+      - name: Bump Homebrew formula
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          V='${{ steps.version.outputs.version }}'
+          TARBALL="https://github.com/emgeorrk/pulse/archive/refs/tags/v${V}.tar.gz"
+          SHA=$(curl -fsSL "$TARBALL" | shasum -a 256 | cut -d' ' -f1)
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/emgeorrk/homebrew-tap.git" tap
+          sed -i '' -E "s|/tags/v[0-9][0-9.]*\.tar\.gz|/tags/v${V}.tar.gz|" tap/Formula/pulse.rb
+          sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"$SHA\"/"             tap/Formula/pulse.rb
+          cd tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "pulse $V"
+          git push

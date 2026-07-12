@@ -21,6 +21,18 @@ dropdown.
 
 ## Install
 
+### Homebrew (recommended)
+
+```sh
+brew install emgeorrk/tap/pulse
+ln -sfn "$(brew --prefix)/opt/pulse/Pulse.app" /Applications/Pulse.app
+open /Applications/Pulse.app
+```
+
+Pulse is compiled from source, so macOS never quarantines it — no Gatekeeper
+prompt, no flags. The second line links it into `/Applications`; `brew upgrade
+pulse` keeps it current.
+
 ### Download (Apple Silicon)
 
 1. Grab the latest `Pulse-<version>-arm64.zip` from the
@@ -34,14 +46,12 @@ dropdown.
    open /Applications/Pulse.app
    ```
 
-The `xattr` step is required because the build is **ad-hoc signed, not
-notarized** — there's no paid Apple Developer account behind it, so Gatekeeper
-would otherwise refuse to launch it. It is not malware: the full source is in
-this repo, and you can build it yourself (below).
+The prebuilt `.app` is ad-hoc signed but not notarized, so a downloaded copy is
+quarantined; the `xattr` step strips that so Gatekeeper lets it run.
 
-> **Apple Silicon only.** The prebuilt binary is arm64. On an Intel Mac, build
-> from source — but note the Intel sensor paths are unverified (see
-> [Platform paths](#platform-paths)).
+> **Apple Silicon only** for the prebuilt `.zip` (it's arm64). On an Intel Mac,
+> use Homebrew or build from source — but note the Intel sensor paths are
+> unverified (see [Platform paths](#platform-paths)).
 
 ### Build from source
 
