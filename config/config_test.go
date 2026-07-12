@@ -73,19 +73,19 @@ func TestLoad(t *testing.T) {
 		content      string // written to the config file; empty means the file is missing
 		wantStyle    VisualStyle
 		wantBar      BarLabelStyle
-		wantDefaults bool // expect full defaults(): sparkline on, default pins
+		wantDefaults bool // expect full defaults(): sparkline off, gnome pins
 	}{
 		{
 			name:         "missing file gives defaults",
-			wantStyle:    VisualEmoji,
-			wantBar:      BarText,
+			wantStyle:    VisualGnome,
+			wantBar:      BarVisual,
 			wantDefaults: true,
 		},
 		{
 			name:         "corrupt file gives defaults",
 			content:      "{not json",
-			wantStyle:    VisualEmoji,
-			wantBar:      BarText,
+			wantStyle:    VisualGnome,
+			wantBar:      BarVisual,
 			wantDefaults: true,
 		},
 		{
@@ -93,14 +93,14 @@ func TestLoad(t *testing.T) {
 			// normalize the style fields instead of leaking unknown values into the UI.
 			name:      "junk style values normalized",
 			content:   `{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`,
-			wantStyle: VisualEmoji,
-			wantBar:   BarText,
+			wantStyle: VisualGnome,
+			wantBar:   BarVisual,
 		},
 		{
 			name:      "valid style values kept",
-			content:   `{"interval_sec":2,"visual_style":"gnome","bar_labels":"visual"}`,
-			wantStyle: VisualGnome,
-			wantBar:   BarVisual,
+			content:   `{"interval_sec":2,"visual_style":"emoji","bar_labels":"text"}`,
+			wantStyle: VisualEmoji,
+			wantBar:   BarText,
 		},
 	}
 	for _, tt := range tests {
@@ -125,11 +125,11 @@ func TestLoad(t *testing.T) {
 			}
 
 			if tt.wantDefaults {
-				if !c.ShowSparkline {
-					t.Error("ShowSparkline = false, want default true")
+				if c.ShowSparkline {
+					t.Error("ShowSparkline = true, want default false")
 				}
 
-				if !c.IsPinned("cpu.total") || !c.IsPinned("mem.used") {
+				if !c.IsPinned("cpu.total") || !c.IsPinned("mem.usage") || !c.IsPinned("temp.hottest") {
 					t.Errorf("default pins broken: %v", c.Pinned)
 				}
 			}

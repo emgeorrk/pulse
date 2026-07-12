@@ -61,10 +61,10 @@ func defaults() Config {
 		IntervalSec:   defaultIntervalSeconds,
 		TempUnit:      Celsius,
 		DecimalBytes:  false,
-		Pinned:        []entity.MetricID{"cpu.total", "mem.used"},
-		ShowSparkline: true,
+		Pinned:        []entity.MetricID{"cpu.total", "mem.usage", "temp.hottest"},
+		ShowSparkline: false,
 		VisualStyle:   VisualEmoji,
-		BarLabels:     BarText,
+		BarLabels:     BarVisual,
 	}
 }
 
@@ -126,12 +126,12 @@ func Load(path string) *Store {
 		c.TempUnit = Celsius
 	}
 
-	if c.VisualStyle != VisualGnome {
-		c.VisualStyle = VisualEmoji
+	if c.VisualStyle != VisualEmoji {
+		c.VisualStyle = VisualGnome
 	}
 
-	if c.BarLabels != BarVisual {
-		c.BarLabels = BarText
+	if c.BarLabels != BarText {
+		c.BarLabels = BarVisual
 	}
 
 	s.c = c
