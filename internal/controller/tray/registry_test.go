@@ -110,6 +110,7 @@ func TestBarPartStyles(t *testing.T) {
 	text := config.Config{BarLabels: config.BarText}
 	emoji := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualEmoji}
 	gnome := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualGnome}
+	classic := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualClassic}
 
 	tests := []struct {
 		name     string
@@ -120,13 +121,16 @@ func TestBarPartStyles(t *testing.T) {
 	}{
 		{"cpu.total text", "cpu.total", text, "", "CPU "},
 		{"cpu.total emoji", "cpu.total", emoji, "", "⚙️ "},
-		{"cpu.total gnome", "cpu.total", gnome, "cpu", " "},
+		{"cpu.total gnome", "cpu.total", gnome, "gnome/cpu", " "},
+		{"cpu.total classic", "cpu.total", classic, "classic/cpu", " "},
 		{"net.down text", "net.down", text, "", "↓"},
 		{"net.down emoji", "net.down", emoji, "", "📶 ↓"},
-		{"net.down gnome", "net.down", gnome, "network-download", " "}, // own icon → no ↓
+		{"net.down gnome", "net.down", gnome, "gnome/network-download", " "}, // own icon → no ↓
+		{"net.down classic", "net.down", classic, "classic/network-download", " "},
 		{"swap.used text", "swap.used", text, "", "SW "},
 		{"swap.used emoji", "swap.used", emoji, "", "🧠 SW "},
-		{"swap.used gnome", "swap.used", gnome, "memory", " SW "}, // group icon → keep SW
+		{"swap.used gnome", "swap.used", gnome, "gnome/memory", " SW "}, // group icon → keep SW
+		{"swap.used classic", "swap.used", classic, "classic/memory", " SW "},
 		{"mem.used text", "mem.used", text, "", ""},
 		{"mem.used emoji", "mem.used", emoji, "", "🧠 "},
 	}
@@ -246,7 +250,8 @@ func TestChargeMark(t *testing.T) {
 		style config.VisualStyle
 		want  string
 	}{
-		{name: "gnome uses monochrome bolt", style: config.VisualGnome, want: chargeMarkGnome},
+		{name: "gnome uses monochrome bolt", style: config.VisualGnome, want: chargeMarkMono},
+		{name: "classic uses monochrome bolt", style: config.VisualClassic, want: chargeMarkMono},
 		{name: "emoji uses color bolt", style: config.VisualEmoji, want: chargeMarkEmoji},
 		{name: "empty style defaults to emoji", style: "", want: chargeMarkEmoji},
 	}

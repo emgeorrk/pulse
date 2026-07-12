@@ -33,9 +33,9 @@ const (
 	metricNetworkDownload    = "net.down"
 	metricDiskFree           = "disk.free"
 	// Battery charging marks: a color emoji for the emoji icon set, a
-	// monochrome text glyph for the gnome set (see chargeMark).
+	// monochrome text glyph for the template-icon packs (see chargeMark).
 	chargeMarkEmoji = " ⚡"
-	chargeMarkGnome = " ↯"
+	chargeMarkMono  = " ↯"
 )
 
 // metric is one row in the dropdown. bar defines a compact value for the
@@ -76,8 +76,8 @@ func (m metric) barPart(s entity.Snapshot, c config.Config) (iconKey, text strin
 		return "", m.tag + val
 	}
 
-	if c.VisualStyle == config.VisualGnome {
-		return m.icon, " " + m.iconQual + val
+	if c.VisualStyle.UsesTemplateIcons() {
+		return icons.TitleKey(string(c.VisualStyle), m.icon), " " + m.iconQual + val
 	}
 
 	return "", m.emoji + " " + m.sym + val
@@ -352,13 +352,13 @@ func powerGroup() group {
 }
 
 // chargeMark is the charging indicator appended to the battery aggregate.
-// The colored ⚡ emoji matches the emoji icon set; the gnome set uses
-// monochrome template icons tinted to the menu text color, so it gets a
+// The colored ⚡ emoji matches the emoji icon set; the icon packs use
+// monochrome template icons tinted to the menu text color, so they get a
 // text-glyph bolt (↯) that tints the same way instead of a color emoji that
 // ignores the tint and stands out.
 func chargeMark(style config.VisualStyle) string {
-	if style == config.VisualGnome {
-		return chargeMarkGnome
+	if style.UsesTemplateIcons() {
+		return chargeMarkMono
 	}
 
 	return chargeMarkEmoji

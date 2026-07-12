@@ -73,18 +73,18 @@ func TestLoad(t *testing.T) {
 		content      string // written to the config file; empty means the file is missing
 		wantStyle    VisualStyle
 		wantBar      BarLabelStyle
-		wantDefaults bool // expect full defaults(): sparkline off, gnome pins
+		wantDefaults bool // expect full defaults(): sparkline off, default pins
 	}{
 		{
 			name:         "missing file gives defaults",
-			wantStyle:    VisualGnome,
+			wantStyle:    VisualEmoji,
 			wantBar:      BarVisual,
 			wantDefaults: true,
 		},
 		{
 			name:         "corrupt file gives defaults",
 			content:      "{not json",
-			wantStyle:    VisualGnome,
+			wantStyle:    VisualEmoji,
 			wantBar:      BarVisual,
 			wantDefaults: true,
 		},
@@ -93,7 +93,7 @@ func TestLoad(t *testing.T) {
 			// normalize the style fields instead of leaking unknown values into the UI.
 			name:      "junk style values normalized",
 			content:   `{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`,
-			wantStyle: VisualGnome,
+			wantStyle: VisualEmoji,
 			wantBar:   BarVisual,
 		},
 		{
@@ -101,6 +101,12 @@ func TestLoad(t *testing.T) {
 			content:   `{"interval_sec":2,"visual_style":"emoji","bar_labels":"text"}`,
 			wantStyle: VisualEmoji,
 			wantBar:   BarText,
+		},
+		{
+			name:      "classic style kept",
+			content:   `{"interval_sec":2,"visual_style":"classic","bar_labels":"visual"}`,
+			wantStyle: VisualClassic,
+			wantBar:   BarVisual,
 		},
 	}
 	for _, tt := range tests {

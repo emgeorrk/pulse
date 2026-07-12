@@ -76,8 +76,10 @@ func (t *Tray) build() {
 	systray.SetTitle(restFrame)
 	systray.SetTooltip("Pulse — system monitor")
 
-	for _, key := range icons.Keys() {
-		systray.RegisterTitleIcon(key, icons.PNG(key))
+	for _, st := range icons.ImageStyles() {
+		for _, key := range icons.MetricKeys() {
+			systray.RegisterTitleIcon(icons.TitleKey(st, key), icons.PNG(st, key))
+		}
 	}
 
 	cfg := t.store.Get()
@@ -145,49 +147,50 @@ const (
 	settingsEmoji = "🛠️"
 )
 
-// applyVisualStyle swaps the dropdown icons between the emoji and gnome
-// sets. Both styles put an image on the item, so a live switch only
-// replaces image contents — an open menu never gains or loses its icon
-// column, which AppKit fails to re-lay out (rows keep a stale indent).
-// Called from build and on a style change — not on every frame, so the
-// images aren't re-decoded each tick.
+// applyVisualStyle swaps the dropdown icons between the emoji and the icon
+// packs (gnome, classic). Every style puts an image on the item, so a live
+// switch only replaces image contents — an open menu never gains or loses its
+// icon column, which AppKit fails to re-lay out (rows keep a stale indent).
+// Called from build and on a style change — not on every frame, so the images
+// aren't re-decoded each tick.
 func (t *Tray) applyVisualStyle(cfg config.Config) {
-	gnome := cfg.VisualStyle == config.VisualGnome
+	style := cfg.VisualStyle
+	template := style.UsesTemplateIcons()
 
 	for gi := range t.groups {
 		g := &t.groups[gi]
-		if gnome {
-			setTemplateIcon(g.item, g.icon)
+		if template {
+			setTemplateIcon(g.item, style, g.icon)
 		} else {
 			g.item.SetEmojiIcon(g.emoji)
 		}
 	}
 
 	if t.sys != nil {
-		if gnome {
-			setTemplateIcon(t.sys, icons.System)
+		if template {
+			setTemplateIcon(t.sys, style, icons.System)
 		} else {
 			t.sys.SetEmojiIcon(sysEmoji)
 		}
 	}
 
 	if t.settings != nil {
-		if gnome {
-			setTemplateIcon(t.settings, icons.Settings)
+		if template {
+			setTemplateIcon(t.settings, style, icons.Settings)
 		} else {
 			t.settings.SetEmojiIcon(settingsEmoji)
 		}
 	}
 
 	t.mu.Lock()
-	t.appliedStyle = cfg.VisualStyle
+	t.appliedStyle = style
 	t.mu.Unlock()
 }
 
 // setTemplateIcon guards against missing assets: no icon beats a panic on
 // empty bytes inside the systray fork.
-func setTemplateIcon(item *systray.MenuItem, key string) {
-	if png := icons.PNG(key); len(png) > 0 {
+func setTemplateIcon(item *systray.MenuItem, style config.VisualStyle, key string) {
+	if png := icons.PNG(string(style), key); len(png) > 0 {
 		item.SetTemplateIcon(png, nil)
 	}
 }
@@ -244,12 +247,16 @@ func (t *Tray) buildSettings(cfg config.Config) { //nolint:funlen,gocognit // Se
 	// dropdown icons via applyVisualStyle
 	visEmoji := s.AddSubMenuItemCheckbox("Icons: Emoji", "", cfg.VisualStyle == config.VisualEmoji)
 	visGnome := s.AddSubMenuItemCheckbox("Icons: GNOME", "", cfg.VisualStyle == config.VisualGnome)
+	visClassic := s.AddSubMenuItemCheckbox("Icons: Classic", "", cfg.VisualStyle == config.VisualClassic)
 
 	visEmoji.KeepMenuOpen()
 
 	visGnome.KeepMenuOpen()
-	go t.watchRadio(visEmoji, visGnome, func(c *config.Config) { c.VisualStyle = config.VisualEmoji })
-	go t.watchRadio(visGnome, visEmoji, func(c *config.Config) { c.VisualStyle = config.VisualGnome })
+
+	visClassic.KeepMenuOpen()
+	go t.watchRadioN(visEmoji, []*systray.MenuItem{visGnome, visClassic}, func(c *config.Config) { c.VisualStyle = config.VisualEmoji })
+	go t.watchRadioN(visGnome, []*systray.MenuItem{visEmoji, visClassic}, func(c *config.Config) { c.VisualStyle = config.VisualGnome })
+	go t.watchRadioN(visClassic, []*systray.MenuItem{visEmoji, visGnome}, func(c *config.Config) { c.VisualStyle = config.VisualClassic })
 
 	// bar label style — radio group
 	barText := s.AddSubMenuItemCheckbox("Bar labels: Text", "", cfg.BarLabels == config.BarText)
@@ -309,6 +316,21 @@ func (t *Tray) watchRadio(me, other *systray.MenuItem, apply func(*config.Config
 		t.updateConfig(apply)
 		me.Check()
 		other.Uncheck()
+		t.refresh()
+	}
+}
+
+// watchRadioN is watchRadio for a group of more than two options: clicking me
+// checks it, unchecks every other item, and applies apply.
+func (t *Tray) watchRadioN(me *systray.MenuItem, others []*systray.MenuItem, apply func(*config.Config)) {
+	for range me.ClickedCh {
+		t.updateConfig(apply)
+		me.Check()
+
+		for _, other := range others {
+			other.Uncheck()
+		}
+
 		t.refresh()
 	}
 }
@@ -426,9 +448,9 @@ func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are im
 	}
 }
 
-// setTitle renders the pinned metrics into the status item. Only the
-// gnome+visual combination needs the attributed-title path; everything
-// else stays a plain string.
+// setTitle renders the pinned metrics into the status item. Only an icon
+// pack in visual mode needs the attributed-title path; everything else
+// (text mode, emoji) stays a plain string.
 func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) { //nolint:cyclop,gocritic,gocyclo // Title modes are intentionally explicit.
 	var parts []systray.TitlePart
 	if cfg.ShowSparkline && len(s.CPU.History) > 0 {
@@ -448,7 +470,7 @@ func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) { //nolint:cyclop,
 		return
 	}
 
-	if cfg.BarLabels == config.BarVisual && cfg.VisualStyle == config.VisualGnome {
+	if cfg.BarLabels == config.BarVisual && cfg.VisualStyle.UsesTemplateIcons() {
 		// icon parts already begin with a space; a single-space separator
 		// keeps the gaps even with the text modes' double space
 		sep := make([]systray.TitlePart, 0, len(parts)*2-1)

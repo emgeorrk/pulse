@@ -27,14 +27,22 @@ const (
 	Fahrenheit TempUnit = "F"
 )
 
-// VisualStyle picks which visuals represent metrics: emoji or the
-// GNOME-style monochrome icons (from Vitals).
+// VisualStyle picks which visuals represent metrics: emoji or one of the
+// monochrome icon packs (from Vitals) — GNOME symbolic or the older Classic set.
 type VisualStyle string
 
 const (
-	VisualEmoji VisualStyle = "emoji"
-	VisualGnome VisualStyle = "gnome"
+	VisualEmoji   VisualStyle = "emoji"
+	VisualGnome   VisualStyle = "gnome"
+	VisualClassic VisualStyle = "classic"
 )
+
+// UsesTemplateIcons reports whether the style renders metrics as monochrome
+// template PNGs (tinted to the menu text) rather than emoji characters. Both
+// icon packs — gnome and classic — do; emoji does not.
+func (v VisualStyle) UsesTemplateIcons() bool {
+	return v == VisualGnome || v == VisualClassic
+}
 
 // BarLabelStyle picks what precedes each pinned value in the menu bar:
 // text tags ("CPU", "MEM"…) or the chosen visual.
@@ -126,8 +134,10 @@ func Load(path string) *Store {
 		c.TempUnit = Celsius
 	}
 
-	if c.VisualStyle != VisualEmoji {
-		c.VisualStyle = VisualGnome
+	switch c.VisualStyle {
+	case VisualEmoji, VisualGnome, VisualClassic: // known styles are kept as-is
+	default:
+		c.VisualStyle = VisualEmoji // unknown/blank falls back to the default pack
 	}
 
 	if c.BarLabels != BarText {
