@@ -18,6 +18,7 @@ import (
 	"github.com/emgeorrk/pulse/internal/sensors"
 	"github.com/emgeorrk/pulse/internal/usecase"
 	"github.com/emgeorrk/pulse/pkg/format"
+	"github.com/emgeorrk/pulse/pkg/pprof"
 )
 
 var errMonitorStopped = errors.New("monitor stopped before first sample")
@@ -149,6 +150,8 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) { //nolint:cy
 
 // Run starts the menu bar app; blocks until it quits.
 func Run() error {
+	pprof.Start() // no-op unless built with -tags debug
+
 	store := loadStore()
 	hw := sensors.ReadHWInfo()
 

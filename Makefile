@@ -3,13 +3,20 @@ BIN_DIR  := bin
 BINARY   := $(BIN_DIR)/pulse
 BUNDLE   := $(BIN_DIR)/$(APP_NAME).app
 PLIST    := build/darwin/Info.plist
+GOTAGS   ?=
 
-.PHONY: all build bundle sign run once generate test vet lint lint-fix clean help
+.PHONY: all build build-debug bundle sign run run-debug once generate test vet lint lint-fix clean help
 
 all: sign ### build and sign the .app (default)
 
 build: ### compile the binary (CGO required: systray/Cocoa + Mach)
-	CGO_ENABLED=1 go build -o $(BINARY) ./cmd/pulse
+	CGO_ENABLED=1 go build $(if $(GOTAGS),-tags $(GOTAGS),) -o $(BINARY) ./cmd/pulse
+
+build-debug: ### compile with the pprof profiling server (-tags debug)
+	$(MAKE) build GOTAGS=debug
+
+run-debug: ### build, sign, and launch a debug build (pprof on localhost:6060)
+	$(MAKE) run GOTAGS=debug
 
 bundle: build ### build $(APP_NAME).app with LSUIElement=true (no Dock icon)
 	rm -rf $(BUNDLE)
