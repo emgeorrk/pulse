@@ -1,4 +1,4 @@
-# Pulse
+# <img src="docs/icon.png" alt="" width="30" height="30" align="absmiddle">&nbsp; Pulse
 
 **See what your Mac is doing — right from the menu bar.**
 
@@ -123,9 +123,9 @@ make test   # run the tests
 Architecture, conventions, and the Apple Silicon vs. Intel sensor paths are
 documented in [CLAUDE.md](CLAUDE.md).
 
-Verified on a Mac17,8 MacBook Pro (Apple M5 Pro, 18 cores) running macOS 26.5.2.
-Everything except the Intel-only paths has been tested there. If you confirm a
-feature on other hardware, a note in a PR is welcome.
+Verified on Apple Silicon. Everything except the Intel-only paths has been
+tested there. If you confirm a feature on other hardware, a note in a PR is
+welcome.
 
 Before opening a pull request:
 

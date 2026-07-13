@@ -3,9 +3,10 @@ BIN_DIR  := bin
 BINARY   := $(BIN_DIR)/pulse
 BUNDLE   := $(BIN_DIR)/$(APP_NAME).app
 PLIST    := build/darwin/Info.plist
+ICON     := build/darwin/AppIcon.icns
 GOTAGS   ?=
 
-.PHONY: all build build-debug bundle sign run run-debug once generate test vet lint lint-fix clean help
+.PHONY: all build build-debug bundle sign run run-debug once appicon generate test vet lint lint-fix clean help
 
 all: sign ### build and sign the .app (default)
 
@@ -20,9 +21,10 @@ run-debug: ### build, sign, and launch a debug build (pprof on localhost:6060)
 
 bundle: build ### build $(APP_NAME).app with LSUIElement=true (no Dock icon)
 	rm -rf $(BUNDLE)
-	mkdir -p $(BUNDLE)/Contents/MacOS
+	mkdir -p $(BUNDLE)/Contents/MacOS $(BUNDLE)/Contents/Resources
 	cp $(BINARY) $(BUNDLE)/Contents/MacOS/pulse
 	cp $(PLIST) $(BUNDLE)/Contents/Info.plist
+	cp $(ICON) $(BUNDLE)/Contents/Resources/AppIcon.icns
 
 sign: bundle ### ad-hoc sign for local use
 	codesign -s - --force $(BUNDLE)
@@ -32,6 +34,9 @@ run: sign ### build, sign, and launch
 
 once: build ### print one metrics frame to stdout (sensor check without UI)
 	$(BINARY) -once
+
+appicon: ### regenerate $(ICON) from build/darwin/AppIcon.svg
+	./scripts/gen-appicon.sh
 
 generate: ### regenerate gomock mocks (go tool mockgen)
 	go generate ./...

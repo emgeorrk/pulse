@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Pulse app icon: a minimalist white heart with a thin gray outline on a
+       light-gray squircle. Monochrome (white/gray) by request. The squircle
+       follows the macOS Big Sur grid (824pt body, ~100pt margin on a 1024
+       canvas). The heart spans ~80% of the plate width and is centered
+       horizontally, nudged ~3.9% below the geometric center so its high
+       visual mass reads as optically centered. -->
+  <rect x="100" y="100" width="824" height="824" rx="184" ry="184" fill="#D8DCE1"/>
+  <g transform="translate(182.4,244.56) scale(6.592)">
+    <path d="M50 88 C12 60 0 40 0 24 C0 10 12 0 26 0 C37 0 46 8 50 18 C54 8 63 0 74 0 C88 0 100 10 100 24 C100 40 88 60 50 88 Z" fill="#FFFFFF" stroke="#6B7079" stroke-width="2.6"/>
+  </g>
+</svg>
