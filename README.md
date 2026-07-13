@@ -1,4 +1,4 @@
-# <img src="docs/icon.png" alt="" width="48" height="48" align="absmiddle">&nbsp;Pulse
+# Pulse
 
 **See what your Mac is doing — right from the menu bar.**
 
