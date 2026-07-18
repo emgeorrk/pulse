@@ -17,6 +17,7 @@ const (
 	labelGPU                 = "GPU"
 	labelUsage               = "Usage"
 	labelUsed                = "Used"
+	labelFree                = "Free"
 	labelTotal               = "Total"
 	labelVoltage             = "Voltage"
 	tagCPU                   = "CPU "
@@ -115,7 +116,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 		icon:  icons.CPU,
 		label: labelCPU,
 		aggregate: func(s entity.Snapshot, c config.Config) string {
-			return format.Percent(s.CPU.Total)
+			return format.Percent(s.CPU.Total, c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
@@ -123,7 +124,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 				label: labelUsage,
 				tag:   tagCPU,
 				menu: func(s entity.Snapshot, c config.Config) string {
-					return format.Percent(s.CPU.Total)
+					return format.Percent(s.CPU.Total, c.HigherPrecision)
 				},
 			},
 		},
@@ -175,7 +176,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 			label: fmt.Sprintf("Core %d", core+1),
 			menu: func(s entity.Snapshot, c config.Config) string {
 				if core < len(s.CPU.Cores) {
-					return format.Percent(s.CPU.Cores[core])
+					return format.Percent(s.CPU.Cores[core], c.HigherPrecision)
 				}
 
 				return "—"
@@ -188,7 +189,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 		icon:  icons.Memory,
 		label: "Memory",
 		aggregate: func(s entity.Snapshot, c config.Config) string {
-			return format.Percent(s.Mem.UsedFraction())
+			return format.Percent(s.Mem.UsedFraction(), c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
@@ -196,37 +197,57 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 				label: labelUsage,
 				tag:   "MEM ",
 				menu: func(s entity.Snapshot, c config.Config) string {
-					return format.Percent(s.Mem.UsedFraction())
+					return format.Percent(s.Mem.UsedFraction(), c.HigherPrecision)
 				},
 			},
 			{
 				id:    metricMemoryUsed,
 				label: labelUsed,
 				menu: func(s entity.Snapshot, c config.Config) string {
-					return format.Bytes(s.Mem.Used, c.DecimalBytes)
+					return format.Bytes(s.Mem.Used, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
-					return format.BytesShort(s.Mem.Used, c.DecimalBytes)
+					return format.BytesShort(s.Mem.Used, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
 				id:    metricMemoryAvailable,
 				label: "Available",
 				menu: func(s entity.Snapshot, c config.Config) string {
-					return format.Bytes(s.Mem.Available, c.DecimalBytes)
+					return format.Bytes(s.Mem.Available, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
-					return format.BytesShort(s.Mem.Available, c.DecimalBytes)
+					return format.BytesShort(s.Mem.Available, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
 				id:    "mem.physical",
 				label: "Physical",
 				menu: func(s entity.Snapshot, c config.Config) string {
-					return format.Bytes(s.Mem.Total, c.DecimalBytes)
+					return format.Bytes(s.Mem.Total, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
-					return format.BytesShort(s.Mem.Total, c.DecimalBytes)
+					return format.BytesShort(s.Mem.Total, c.DecimalBytes, c.HigherPrecision)
+				},
+			},
+			{
+				id:    "mem.free",
+				label: labelFree,
+				menu: func(s entity.Snapshot, c config.Config) string {
+					return format.Bytes(s.Mem.Free, c.DecimalBytes, c.HigherPrecision)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					return format.BytesShort(s.Mem.Free, c.DecimalBytes, c.HigherPrecision)
+				},
+			},
+			{
+				id:    "mem.cached",
+				label: "Cached",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					return format.Bytes(s.Mem.Cached, c.DecimalBytes, c.HigherPrecision)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					return format.BytesShort(s.Mem.Cached, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
@@ -235,16 +256,32 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 				tag:   tagSwap,
 				sym:   tagSwap,
 				menu: func(s entity.Snapshot, c config.Config) string {
-					return format.Bytes(s.Mem.SwapUsed, c.DecimalBytes)
+					return format.Bytes(s.Mem.SwapUsed, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
-					return format.BytesShort(s.Mem.SwapUsed, c.DecimalBytes)
+					return format.BytesShort(s.Mem.SwapUsed, c.DecimalBytes, c.HigherPrecision)
+				},
+			},
+			{
+				id:    "swap.total",
+				label: "Swap total",
+				tag:   tagSwap,
+				sym:   tagSwap,
+				menu: func(s entity.Snapshot, c config.Config) string {
+					return format.Bytes(s.Mem.SwapTotal, c.DecimalBytes, c.HigherPrecision)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					return format.BytesShort(s.Mem.SwapTotal, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 		},
 	}
 
 	groups := []group{cpu, mem}
+	if caps.System {
+		groups = append(groups, systemGroup())
+	}
+
 	if caps.Temps {
 		groups = append(groups, tempGroup(caps.TempSensors))
 	}
@@ -280,6 +317,74 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 	return groups
 }
 
+func systemGroup() group {
+	load := func(get func(*entity.SystemStats) float64) func(entity.Snapshot, config.Config) string {
+		return func(s entity.Snapshot, c config.Config) string {
+			if s.System == nil {
+				return "—"
+			}
+
+			return format.Load(get(s.System))
+		}
+	}
+
+	return group{
+		emoji: "🖥️",
+		icon:  icons.System,
+		label: "System",
+		aggregate: func(s entity.Snapshot, c config.Config) string {
+			if s.System == nil {
+				return "—"
+			}
+
+			return format.Load(s.System.Load1)
+		},
+		metrics: []metric{
+			{
+				id:    "sys.load1",
+				label: "Load 1m",
+				tag:   "LOAD ",
+				menu:  load(func(st *entity.SystemStats) float64 { return st.Load1 }),
+			},
+			{id: "sys.load5", label: "Load 5m", menu: load(func(st *entity.SystemStats) float64 { return st.Load5 })},
+			{id: "sys.load15", label: "Load 15m", menu: load(func(st *entity.SystemStats) float64 { return st.Load15 })},
+			{
+				id:    "sys.uptime",
+				label: "Uptime",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.System == nil || s.System.UptimeSec == 0 {
+						return "—"
+					}
+
+					return format.Uptime(s.System.UptimeSec)
+				},
+			},
+			{
+				id:    "sys.procs",
+				label: "Processes",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.System == nil || s.System.Procs == 0 {
+						return "—"
+					}
+
+					return fmt.Sprintf("%d", s.System.Procs)
+				},
+			},
+			{
+				id:    "sys.files",
+				label: "Open files",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.System == nil || s.System.OpenFiles == 0 {
+						return "—"
+					}
+
+					return fmt.Sprintf("%d", s.System.OpenFiles)
+				},
+			},
+		},
+	}
+}
+
 func gpuGroup() group {
 	return group{
 		emoji: "🎮",
@@ -290,7 +395,7 @@ func gpuGroup() group {
 				return "—"
 			}
 
-			return format.Percent(s.GPU.Utilization)
+			return format.Percent(s.GPU.Utilization, c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
@@ -302,7 +407,7 @@ func gpuGroup() group {
 						return "—"
 					}
 
-					return format.Percent(s.GPU.Utilization)
+					return format.Percent(s.GPU.Utilization, c.HigherPrecision)
 				},
 			},
 		},
@@ -322,7 +427,7 @@ func powerGroup() group {
 
 	return group{
 		emoji: "🔌",
-		icon:  icons.Voltage, // the set has no dedicated power icon; the bolt fits watts
+		icon:  icons.Power,
 		label: "Power",
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			if s.Power == nil {
@@ -379,7 +484,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 				state = chargeMark(c.VisualStyle)
 			}
 
-			return format.Percent(s.Battery.Percent) + state
+			return format.Percent(s.Battery.Percent, c.HigherPrecision) + state
 		},
 		metrics: []metric{
 			{
@@ -391,7 +496,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 						return "—"
 					}
 
-					return format.Percent(s.Battery.Percent)
+					return format.Percent(s.Battery.Percent, c.HigherPrecision)
 				},
 			},
 			{
@@ -440,7 +545,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 						return "—"
 					}
 
-					return format.Percent(s.Battery.Health)
+					return format.Percent(s.Battery.Health, c.HigherPrecision)
 				},
 			},
 			{
@@ -462,7 +567,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 						return "—"
 					}
 
-					return format.Temp(s.Battery.TempC, c.TempUnit == config.Fahrenheit)
+					return format.Temp(s.Battery.TempC, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 				},
 			},
 			{
@@ -491,10 +596,10 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 			}
 
 			if s.Temps.CPU > 0 {
-				return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
+				return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 			}
 
-			return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
+			return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
@@ -505,14 +610,14 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 						return "—"
 					}
 
-					return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
+					return format.Temp(s.Temps.CPU, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.CPU == 0 {
 						return unavailableTemperature
 					}
 
-					return format.TempShort(s.Temps.CPU, c.TempUnit == config.Fahrenheit)
+					return format.TempShort(s.Temps.CPU, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 				},
 			},
 			{
@@ -525,14 +630,14 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 						return "—"
 					}
 
-					return format.Temp(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
+					return format.Temp(s.Temps.GPU, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.GPU == 0 {
 						return unavailableTemperature
 					}
 
-					return format.TempShort(s.Temps.GPU, c.TempUnit == config.Fahrenheit)
+					return format.TempShort(s.Temps.GPU, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 				},
 			},
 			{
@@ -543,7 +648,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 						return "—"
 					}
 
-					return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit) +
+					return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision) +
 						" (" + s.Temps.Hottest.Name + ")"
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
@@ -551,10 +656,16 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 						return unavailableTemperature
 					}
 
-					return format.TempShort(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit)
+					return format.TempShort(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 				},
 			},
 		},
+	}
+
+	// Derived rows only make sense with more than one sensor (as in Vitals);
+	// "Maximum" is already covered by Hottest.
+	if len(sensorNames) > 1 {
+		g.metrics = append(g.metrics, tempDerivedMetrics()...)
 	}
 
 	for _, name := range sensorNames {
@@ -565,7 +676,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 				if s.Temps != nil {
 					for _, r := range s.Temps.All {
 						if r.Name == name {
-							return format.Temp(r.Value, c.TempUnit == config.Fahrenheit)
+							return format.Temp(r.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
 						}
 					}
 				}
@@ -576,6 +687,50 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 	}
 
 	return g
+}
+
+// tempDerivedMetrics builds the Average/Coolest rows shown when the group
+// has more than one sensor.
+func tempDerivedMetrics() []metric {
+	return []metric{
+		{
+			id:    "temp.avg",
+			label: "Average",
+			menu: func(s entity.Snapshot, c config.Config) string {
+				if s.Temps == nil || s.Temps.Avg == 0 {
+					return "—"
+				}
+
+				return format.Temp(s.Temps.Avg, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
+			},
+			bar: func(s entity.Snapshot, c config.Config) string {
+				if s.Temps == nil || s.Temps.Avg == 0 {
+					return unavailableTemperature
+				}
+
+				return format.TempShort(s.Temps.Avg, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
+			},
+		},
+		{
+			id:    "temp.coolest",
+			label: "Coolest",
+			menu: func(s entity.Snapshot, c config.Config) string {
+				if s.Temps == nil || s.Temps.Coolest.Name == "" {
+					return "—"
+				}
+
+				return format.Temp(s.Temps.Coolest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision) +
+					" (" + s.Temps.Coolest.Name + ")"
+			},
+			bar: func(s entity.Snapshot, c config.Config) string {
+				if s.Temps == nil || s.Temps.Coolest.Name == "" {
+					return unavailableTemperature
+				}
+
+				return format.TempShort(s.Temps.Coolest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision)
+			},
+		},
+	}
 }
 
 func fanGroup(count int) group { //nolint:gocognit // Each fan metric formats current and rated speeds independently.
@@ -604,7 +759,7 @@ func fanGroup(count int) group { //nolint:gocognit // Each fan metric formats cu
 				if idx < len(s.Fans) {
 					f := s.Fans[idx]
 					if f.Max > 0 {
-						return fmt.Sprintf("%s (%s)", format.RPM(f.RPM), format.Percent(f.RPM/f.Max))
+						return fmt.Sprintf("%s (%s)", format.RPM(f.RPM), format.Percent(f.RPM/f.Max, c.HigherPrecision))
 					}
 
 					return format.RPM(f.RPM)
@@ -668,7 +823,7 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 				return "—"
 			}
 
-			return "↓" + format.SpeedShort(s.Net.Down) + " ↑" + format.SpeedShort(s.Net.Up)
+			return "↓" + format.SpeedShort(s.Net.Down, c.HigherPrecision) + " ↑" + format.SpeedShort(s.Net.Up, c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
@@ -682,14 +837,14 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 						return "—"
 					}
 
-					return format.Speed(s.Net.Down)
+					return format.Speed(s.Net.Down, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
 
-					return format.SpeedShort(s.Net.Down)
+					return format.SpeedShort(s.Net.Down, c.HigherPrecision)
 				},
 			},
 			{
@@ -703,14 +858,14 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 						return "—"
 					}
 
-					return format.Speed(s.Net.Up)
+					return format.Speed(s.Net.Up, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
 
-					return format.SpeedShort(s.Net.Up)
+					return format.SpeedShort(s.Net.Up, c.HigherPrecision)
 				},
 			},
 			{
@@ -724,14 +879,25 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 						return "—"
 					}
 
-					return format.Bytes(s.Net.SessionDown, c.DecimalBytes)
+					return format.Bytes(s.Net.SessionDown, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Net.SessionDown, c.DecimalBytes)
+					return format.BytesShort(s.Net.SessionDown, c.DecimalBytes, c.HigherPrecision)
+				},
+			},
+			{
+				id:    "net.ip",
+				label: "Public IP",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil || s.Net.PublicIP == "" {
+						return "—"
+					}
+
+					return format.WithFlag(s.Net.PublicIP, s.Net.IPCountry)
 				},
 			},
 			{
@@ -745,14 +911,14 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 						return "—"
 					}
 
-					return format.Bytes(s.Net.SessionUp, c.DecimalBytes)
+					return format.Bytes(s.Net.SessionUp, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Net.SessionUp, c.DecimalBytes)
+					return format.BytesShort(s.Net.SessionUp, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 		},
@@ -766,7 +932,7 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 				if s.Net != nil {
 					for _, i := range s.Net.Ifaces {
 						if i.Name == name {
-							return "↓" + format.SpeedShort(i.Down) + " ↑" + format.SpeedShort(i.Up)
+							return "↓" + format.SpeedShort(i.Down, c.HigherPrecision) + " ↑" + format.SpeedShort(i.Up, c.HigherPrecision)
 						}
 					}
 				}
@@ -789,7 +955,7 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 				return "—"
 			}
 
-			return format.Percent(s.Disk.UsedFraction())
+			return format.Percent(s.Disk.UsedFraction(), c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
@@ -801,7 +967,7 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Percent(s.Disk.UsedFraction())
+					return format.Percent(s.Disk.UsedFraction(), c.HigherPrecision)
 				},
 			},
 			{
@@ -812,32 +978,32 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Bytes(s.Disk.Used, c.DecimalBytes)
+					return format.Bytes(s.Disk.Used, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Disk.Used, c.DecimalBytes)
+					return format.BytesShort(s.Disk.Used, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
 				id:    metricDiskFree,
-				label: "Free",
+				label: labelFree,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.Bytes(s.Disk.Available, c.DecimalBytes)
+					return format.Bytes(s.Disk.Available, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Disk.Available, c.DecimalBytes)
+					return format.BytesShort(s.Disk.Available, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
@@ -848,14 +1014,14 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Bytes(s.Disk.Total, c.DecimalBytes)
+					return format.Bytes(s.Disk.Total, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Disk.Total, c.DecimalBytes)
+					return format.BytesShort(s.Disk.Total, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
@@ -868,14 +1034,14 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Speed(s.Disk.ReadRate)
+					return format.Speed(s.Disk.ReadRate, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.SpeedShort(s.Disk.ReadRate)
+					return format.SpeedShort(s.Disk.ReadRate, c.HigherPrecision)
 				},
 			},
 			{
@@ -888,14 +1054,14 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Speed(s.Disk.WriteRate)
+					return format.Speed(s.Disk.WriteRate, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.SpeedShort(s.Disk.WriteRate)
+					return format.SpeedShort(s.Disk.WriteRate, c.HigherPrecision)
 				},
 			},
 			{
@@ -908,14 +1074,14 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Bytes(s.Disk.ReadTotal, c.DecimalBytes)
+					return format.Bytes(s.Disk.ReadTotal, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Disk.ReadTotal, c.DecimalBytes)
+					return format.BytesShort(s.Disk.ReadTotal, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 			{
@@ -928,14 +1094,14 @@ func diskGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Disk metrics
 						return "—"
 					}
 
-					return format.Bytes(s.Disk.WriteTotal, c.DecimalBytes)
+					return format.Bytes(s.Disk.WriteTotal, c.DecimalBytes, c.HigherPrecision)
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Disk == nil {
 						return "—"
 					}
 
-					return format.BytesShort(s.Disk.WriteTotal, c.DecimalBytes)
+					return format.BytesShort(s.Disk.WriteTotal, c.DecimalBytes, c.HigherPrecision)
 				},
 			},
 		},

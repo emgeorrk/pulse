@@ -14,22 +14,41 @@ import (
 // historyLen is how many recent CPU values to keep for the sparkline.
 const historyLen = 8
 
+// Public IP lookup schedule: a fresh value is kept for publicIPRefresh; a
+// failed lookup is retried after publicIPRetry.
+const (
+	publicIPRefresh = 15 * time.Minute
+	publicIPRetry   = time.Minute
+)
+
+// ipResult is one finished public IP lookup.
+type ipResult struct {
+	info entity.PublicIPInfo
+	ok   bool
+}
+
 type Monitor struct {
-	src       *sensors.Sources
-	lastTick  time.Time
-	store     *config.Store
-	prevNet   map[string]entity.NetCounters
-	prevTicks []entity.CoreTicks
-	history   []float64
-	sessDown  uint64
-	sessUp    uint64
-	prevRead  uint64
-	prevWrite uint64
-	haveDisk  bool
+	lastTick    time.Time
+	ipFetchedAt time.Time
+	store       *config.Store
+	prevNet     map[string]entity.NetCounters
+	src         *sensors.Sources
+	ipCh        chan ipResult
+	ip          string
+	ipCountry   string
+	prevTicks   []entity.CoreTicks
+	history     []float64
+	sessDown    uint64
+	sessUp      uint64
+	prevRead    uint64
+	prevWrite   uint64
+	haveDisk    bool
+	ipInFlight  bool
+	ipOK        bool
 }
 
 func NewMonitor(src *sensors.Sources, store *config.Store) *Monitor {
-	return &Monitor{src: src, store: store}
+	return &Monitor{src: src, store: store, ipCh: make(chan ipResult, 1)}
 }
 
 // Start launches the sampling loop in its own goroutine (never on the UI
@@ -60,7 +79,7 @@ func (m *Monitor) Start(ctx context.Context) <-chan entity.Snapshot {
 				ticker.Reset(interval)
 			}
 
-			snap := m.sample()
+			snap := m.sample(ctx)
 
 			// UI hasn't picked up the previous frame yet — just drop it.
 			select {
@@ -96,7 +115,9 @@ func (m *Monitor) prime() {
 }
 
 // sample takes one frame of all available metrics.
-func (m *Monitor) sample() entity.Snapshot { //nolint:cyclop,funlen,gocognit,gocyclo // Each optional source is sampled independently by design.
+func (m *Monitor) sample(ctx context.Context) entity.Snapshot { //nolint:cyclop,funlen,gocognit,gocyclo // Each optional source is sampled independently by design.
+	m.pollPublicIP(ctx)
+
 	now := time.Now()
 	dwell := now.Sub(m.lastTick).Seconds()
 	m.lastTick = now
@@ -134,6 +155,7 @@ func (m *Monitor) sample() entity.Snapshot { //nolint:cyclop,funlen,gocognit,goc
 			m.sessDown += uint64(net.Down * dwell)
 			m.sessUp += uint64(net.Up * dwell)
 			net.SessionDown, net.SessionUp = m.sessDown, m.sessUp
+			net.PublicIP, net.IPCountry = m.ip, m.ipCountry
 			snap.Net = &net
 		}
 	}
@@ -194,7 +216,69 @@ func (m *Monitor) sample() entity.Snapshot { //nolint:cyclop,funlen,gocognit,goc
 		}
 	}
 
+	if m.src.System != nil {
+		if st, err := m.src.System.System(); err == nil {
+			snap.System = &st
+		}
+	}
+
 	return snap
+}
+
+// pollPublicIP drains a finished lookup and starts a new one when the metric
+// is enabled and the current value is stale. The HTTP request runs in its
+// own goroutine, so a slow provider never blocks the sampling tick.
+func (m *Monitor) pollPublicIP(ctx context.Context) {
+	if m.src.PublicIP == nil {
+		return
+	}
+
+	select {
+	case res := <-m.ipCh:
+		m.ipInFlight = false
+		m.ipFetchedAt = time.Now()
+		m.ipOK = res.ok
+
+		if res.ok {
+			m.ip, m.ipCountry = res.info.IP, res.info.Country
+		}
+	default:
+	}
+
+	if !m.store.Get().ShowPublicIP {
+		// Drop the value so re-enabling starts from a fresh lookup.
+		m.ip, m.ipCountry = "", ""
+		m.ipFetchedAt = time.Time{}
+
+		return
+	}
+
+	if m.ipInFlight || !publicIPDue(m.ipFetchedAt, m.ipOK, time.Now()) {
+		return
+	}
+
+	m.ipInFlight = true
+
+	go func() {
+		info, err := m.src.PublicIP.Fetch(ctx)
+		m.ipCh <- ipResult{info: info, ok: err == nil}
+	}()
+}
+
+// publicIPDue reports whether a new lookup should start: immediately when
+// none has finished yet, after publicIPRefresh on success, and after
+// publicIPRetry on failure.
+func publicIPDue(fetchedAt time.Time, lastOK bool, now time.Time) bool {
+	if fetchedAt.IsZero() {
+		return true
+	}
+
+	wait := publicIPRefresh
+	if !lastOK {
+		wait = publicIPRetry
+	}
+
+	return now.Sub(fetchedAt) >= wait
 }
 
 // CPUUsage computes load from the delta of cumulative ticks. Ticks are

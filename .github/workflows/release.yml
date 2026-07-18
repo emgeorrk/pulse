@@ -13,6 +13,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags for the changelog
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -43,10 +45,54 @@ jobs:
           ditto -c -k --keepParent bin/Pulse.app "$ZIP"
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
 
-      - name: Write release notes
+      # Asks Claude (via OpenRouter) to write a short "What's changed" section
+      # from the commit subjects since the previous tag. Falls back to the raw
+      # commit list if the key is missing or the request fails — the release
+      # must never break on this step.
+      - name: Generate changelog
+        id: changelog
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          cat > notes.md <<'EOF'
-          A native macOS menu bar system monitor. **Apple Silicon (arm64) only.**
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+          COMMITS=$(git log --no-merges --format='- %s' ${PREV:+"$PREV.."}"$GITHUB_REF_NAME")
+          SYSTEM='You write release notes for Pulse, a native macOS menu bar
+          system monitor. Given the git commit subjects for a new release,
+          produce a brief changelog: a markdown bullet list in English,
+          user-facing wording, most important changes first, related commits
+          merged into one bullet. Output only the bullet list - no headings,
+          no preamble, no code fences.'
+          BODY=$(jq -n --arg system "$SYSTEM" --arg commits "$COMMITS" \
+            '{model: "anthropic/claude-opus-4.8", max_tokens: 2000,
+              messages: [{role: "system", content: $system},
+                         {role: "user", content: $commits}]}')
+          CHANGELOG=$(curl -fsS https://openrouter.ai/api/v1/chat/completions \
+            -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" | jq -r '.choices[0].message.content // empty' || true)
+          if [ -z "$CHANGELOG" ]; then
+            echo "::warning::LLM changelog failed; falling back to the raw commit list"
+            CHANGELOG=$COMMITS
+          fi
+          printf '%s\n' "$CHANGELOG" > changelog.md
+
+      - name: Write release notes
+        env:
+          PREV: ${{ steps.changelog.outputs.prev }}
+        run: |
+          {
+            echo "A native macOS menu bar system monitor. **Apple Silicon (arm64) only.**"
+            echo
+            echo "## What's changed"
+            echo
+            cat changelog.md
+            if [ -n "$PREV" ]; then
+              echo
+              echo "**Full changelog**: https://github.com/emgeorrk/pulse/compare/${PREV}...${GITHUB_REF_NAME}"
+            fi
+          } > notes.md
+          cat >> notes.md <<'EOF'
 
           ## Install
 

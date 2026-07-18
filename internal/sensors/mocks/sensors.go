@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	entity "github.com/emgeorrk/pulse/internal/entity"
@@ -303,6 +304,84 @@ func (m *MockFanSource) Fans() ([]entity.Fan, error) {
 func (mr *MockFanSourceMockRecorder) Fans() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fans", reflect.TypeOf((*MockFanSource)(nil).Fans))
+}
+
+// MockSystemSource is a mock of SystemSource interface.
+type MockSystemSource struct {
+	ctrl     *gomock.Controller
+	recorder *MockSystemSourceMockRecorder
+	isgomock struct{}
+}
+
+// MockSystemSourceMockRecorder is the mock recorder for MockSystemSource.
+type MockSystemSourceMockRecorder struct {
+	mock *MockSystemSource
+}
+
+// NewMockSystemSource creates a new mock instance.
+func NewMockSystemSource(ctrl *gomock.Controller) *MockSystemSource {
+	mock := &MockSystemSource{ctrl: ctrl}
+	mock.recorder = &MockSystemSourceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSystemSource) EXPECT() *MockSystemSourceMockRecorder {
+	return m.recorder
+}
+
+// System mocks base method.
+func (m *MockSystemSource) System() (entity.SystemStats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "System")
+	ret0, _ := ret[0].(entity.SystemStats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// System indicates an expected call of System.
+func (mr *MockSystemSourceMockRecorder) System() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "System", reflect.TypeOf((*MockSystemSource)(nil).System))
+}
+
+// MockPublicIPSource is a mock of PublicIPSource interface.
+type MockPublicIPSource struct {
+	ctrl     *gomock.Controller
+	recorder *MockPublicIPSourceMockRecorder
+	isgomock struct{}
+}
+
+// MockPublicIPSourceMockRecorder is the mock recorder for MockPublicIPSource.
+type MockPublicIPSourceMockRecorder struct {
+	mock *MockPublicIPSource
+}
+
+// NewMockPublicIPSource creates a new mock instance.
+func NewMockPublicIPSource(ctrl *gomock.Controller) *MockPublicIPSource {
+	mock := &MockPublicIPSource{ctrl: ctrl}
+	mock.recorder = &MockPublicIPSourceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPublicIPSource) EXPECT() *MockPublicIPSourceMockRecorder {
+	return m.recorder
+}
+
+// Fetch mocks base method.
+func (m *MockPublicIPSource) Fetch(ctx context.Context) (entity.PublicIPInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fetch", ctx)
+	ret0, _ := ret[0].(entity.PublicIPInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Fetch indicates an expected call of Fetch.
+func (mr *MockPublicIPSourceMockRecorder) Fetch(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockPublicIPSource)(nil).Fetch), ctx)
 }
 
 // MockBatterySource is a mock of BatterySource interface.

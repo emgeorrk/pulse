@@ -12,9 +12,11 @@ func TestAggregateTemps(t *testing.T) {
 	tests := []struct {
 		name        string
 		all         []entity.Reading
+		wantHottest entity.Reading
+		wantCoolest entity.Reading
 		wantCPU     float64
 		wantGPU     float64
-		wantHottest entity.Reading
+		wantAvg     float64
 	}{
 		{
 			name: "apple silicon HID names",
@@ -27,7 +29,9 @@ func TestAggregateTemps(t *testing.T) {
 			},
 			wantCPU:     55, // average of tdie0+tdie1
 			wantGPU:     45,
+			wantAvg:     45, // average of all five
 			wantHottest: entity.Reading{Name: "PMU tdie1", Value: 60},
+			wantCoolest: entity.Reading{Name: "gas gauge battery", Value: 30},
 		},
 		{
 			// M5-style set: HID exposes only generic "PMU tdie*" names, the GPU
@@ -42,15 +46,19 @@ func TestAggregateTemps(t *testing.T) {
 			},
 			wantCPU:     36, // average of tdie1..3
 			wantGPU:     42.5,
+			wantAvg:     36.3,
 			wantHottest: entity.Reading{Name: "GPU die", Value: 42.5},
+			wantCoolest: entity.Reading{Name: "NAND CH0 temp", Value: 31},
 		},
 		{
-			// no CPU/GPU matches: aggregates stay 0, hottest still tracked
+			// no CPU/GPU matches: aggregates stay 0, hottest/coolest still tracked
 			name:        "no matches",
 			all:         []entity.Reading{{Name: "NAND CH0 temp", Value: 40}},
 			wantCPU:     0,
 			wantGPU:     0,
+			wantAvg:     40,
 			wantHottest: entity.Reading{Name: "NAND CH0 temp", Value: 40},
+			wantCoolest: entity.Reading{Name: "NAND CH0 temp", Value: 40},
 		},
 		{
 			// Intel path: labels from the curated SMC key list
@@ -61,7 +69,13 @@ func TestAggregateTemps(t *testing.T) {
 			},
 			wantCPU:     58,
 			wantGPU:     52,
+			wantAvg:     55,
 			wantHottest: entity.Reading{Name: "CPU proximity", Value: 58},
+			wantCoolest: entity.Reading{Name: "GPU proximity", Value: 52},
+		},
+		{
+			// no sensors at all: everything stays zero
+			name: "empty",
 		},
 	}
 	for _, tt := range tests {
@@ -78,8 +92,16 @@ func TestAggregateTemps(t *testing.T) {
 				t.Errorf("GPU = %v, want %v", got.GPU, tt.wantGPU)
 			}
 
+			if !almostEqual(got.Avg, tt.wantAvg) {
+				t.Errorf("Avg = %v, want %v", got.Avg, tt.wantAvg)
+			}
+
 			if got.Hottest.Name != tt.wantHottest.Name || !almostEqual(got.Hottest.Value, tt.wantHottest.Value) {
 				t.Errorf("Hottest = %+v, want %+v", got.Hottest, tt.wantHottest)
+			}
+
+			if got.Coolest.Name != tt.wantCoolest.Name || !almostEqual(got.Coolest.Value, tt.wantCoolest.Value) {
+				t.Errorf("Coolest = %+v, want %+v", got.Coolest, tt.wantCoolest)
 			}
 		})
 	}

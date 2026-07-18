@@ -25,9 +25,15 @@ originates from:
 - `fan` — inherited from the Freon extension (modified)
 - `temperature`, `cpu` — designed by [daudix](https://daudix.github.io)
 
-`settings.png` is not from Vitals: it is Apple's SF Symbol `gearshape.fill`
-rendered by `scripts/sfsymbol2png.swift` (the Vitals set has no gear). SF
-Symbols may be used in apps for Apple platforms per Apple's license terms.
+Some glyphs are not from Vitals; they are Apple SF Symbols rendered by
+`scripts/sfsymbol2png.swift` for icons the Vitals set lacks. SF Symbols may
+be used in apps for Apple platforms per Apple's license terms:
+
+- `settings.png` — `gearshape.fill` (shared across styles)
+- `about.png` — `info.circle` (shared across styles)
+- `activity.png` — `waveform.path.ecg` (shared across styles)
+- `<style>/power.png` — `powerplug.fill` (per style: Power is a pinnable
+  metric, so its icon resolves per style like the Vitals ones)
 
 Redistributing Pulse with these icons embedded carries the corresponding
 GPL/attribution obligations. Keep this notice when distributing.
