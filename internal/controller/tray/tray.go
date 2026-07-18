@@ -118,7 +118,7 @@ func (t *Tray) build() {
 	}
 
 	// Vitals' "System Monitor" button; the macOS equivalent is Activity Monitor.
-	t.actMon = systray.AddMenuItem("Open Activity Monitor", "")
+	t.actMon = systray.AddMenuItem("Activity Monitor", "")
 	go func() {
 		for range t.actMon.ClickedCh {
 			openActivityMonitor()

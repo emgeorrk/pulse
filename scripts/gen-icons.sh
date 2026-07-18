@@ -41,7 +41,7 @@ for svg_dir in "$svg_root"/*/; do
 done
 
 # The Vitals sets also have no gear, info or activity glyphs; the Settings,
-# About and Open Activity Monitor items use SF Symbols instead. These are
+# About and Activity Monitor items use SF Symbols instead. These are
 # menu items only (never in the menu bar title), so one PNG is shared across
 # every style and lives at the png root (not in a style dir).
 for spec in "gearshape.fill settings" "info.circle about" "waveform.path.ecg activity"; do
