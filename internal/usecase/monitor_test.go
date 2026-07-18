@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"math"
 	"testing"
@@ -161,9 +162,9 @@ func TestSample(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name  string
 		build func(ctrl *gomock.Controller) *Monitor
 		check func(t *testing.T, snap entity.Snapshot)
+		name  string
 	}{
 		{
 			name:  "all sources populate the snapshot",
@@ -318,7 +319,7 @@ func TestSample(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 			m := tt.build(ctrl)
-			tt.check(t, m.sample())
+			tt.check(t, m.sample(context.Background()))
 		})
 	}
 }

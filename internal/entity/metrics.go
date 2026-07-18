@@ -29,6 +29,7 @@ type MemStats struct {
 	Used      uint64 // app memory + wired + compressed (matches "Memory Used" in Activity Monitor)
 	Available uint64 // free + inactive
 	Free      uint64
+	Cached    uint64 // file-backed + purgeable (matches "Cached Files" in Activity Monitor)
 	SwapTotal uint64
 	SwapUsed  uint64
 }
@@ -69,13 +70,23 @@ type NetIface struct {
 }
 
 // NetStats holds network stats: total throughput, session-accumulated
-// traffic, and the per-interface breakdown.
+// traffic, the per-interface breakdown, and the public IP (empty when the
+// lookup is disabled or hasn't answered yet).
 type NetStats struct {
+	PublicIP    string
+	IPCountry   string
 	Ifaces      []NetIface
 	Down        float64
 	Up          float64
 	SessionDown uint64
 	SessionUp   uint64
+}
+
+// PublicIPInfo is one public IP lookup result. Country is the ISO 3166-1
+// alpha-2 code (upper case), empty when the provider doesn't report it.
+type PublicIPInfo struct {
+	IP      string
+	Country string
 }
 
 // DiskUsage holds root-volume usage, in bytes.
@@ -102,6 +113,17 @@ type DiskStats struct {
 	WriteTotal uint64
 }
 
+// SystemStats holds system-wide state: load averages, uptime and the
+// process/open-file counts. Zero Procs/OpenFiles means "unknown".
+type SystemStats struct {
+	Load1     float64
+	Load5     float64
+	Load15    float64
+	UptimeSec uint64
+	Procs     int
+	OpenFiles int
+}
+
 // Reading is a single reading from a named sensor (temperature °C, volts, …).
 type Reading struct {
 	Name  string
@@ -111,9 +133,11 @@ type Reading struct {
 // TempStats holds aggregates + every temperature sensor.
 type TempStats struct {
 	Hottest Reading
+	Coolest Reading
 	All     []Reading
 	CPU     float64
 	GPU     float64
+	Avg     float64 // average across all sensors
 }
 
 // Fan is a single fan: current RPM and its rated limits.
@@ -174,6 +198,7 @@ type Caps struct {
 	Power        bool
 	Freq         bool
 	Disk         bool
+	System       bool
 }
 
 // Snapshot is one frame of all metrics sent to the UI. Groups that may be
@@ -186,6 +211,7 @@ type Snapshot struct {
 	GPU     *GPUStats
 	Power   *PowerStats
 	Freq    *FreqStats
+	System  *SystemStats
 	Volts   []Reading
 	Fans    []Fan
 	CPU     CPUStats

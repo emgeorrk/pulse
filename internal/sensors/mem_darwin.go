@@ -59,6 +59,7 @@ func (m *Mem) Read() (entity.MemStats, error) {
 	compressed := uint64(stat.compressor_page_count) * ps
 	internal := uint64(stat.internal_page_count) * ps
 	purgeable := uint64(stat.purgeable_count) * ps
+	external := uint64(stat.external_page_count) * ps
 
 	// "Memory Used" as in Activity Monitor: App Memory (internal − purgeable)
 	// + Wired + Compressed.
@@ -67,11 +68,13 @@ func (m *Mem) Read() (entity.MemStats, error) {
 		appMem = internal - purgeable
 	}
 
+	// "Cached Files" as in Activity Monitor: file-backed + purgeable pages.
 	st := entity.MemStats{
 		Total:     m.total,
 		Used:      appMem + wired + compressed,
 		Available: free + inactive,
 		Free:      free,
+		Cached:    external + purgeable,
 	}
 
 	// Swap isn't critical: on error we show zeros instead of failing.

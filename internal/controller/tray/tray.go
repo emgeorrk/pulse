@@ -9,6 +9,7 @@ package tray
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ type Tray struct { //nolint:govet // Field order follows UI lifecycle and state 
 	store        *config.Store
 	bar          map[entity.MetricID]metric
 	sys          *systray.MenuItem
+	actMon       *systray.MenuItem
 	settings     *systray.MenuItem
 	appliedStyle config.VisualStyle
 	groups       []groupUI
@@ -101,7 +103,7 @@ func (t *Tray) build() {
 
 	systray.AddSeparator()
 
-	t.sys = systray.AddMenuItem("System", "")
+	t.sys = systray.AddMenuItem("About", "")
 	t.sys.AddSubMenuItem(t.hw.Chip, "")
 
 	switch {
@@ -114,6 +116,14 @@ func (t *Tray) build() {
 	if t.hw.OSVersion != "" {
 		t.sys.AddSubMenuItem("macOS "+t.hw.OSVersion, "")
 	}
+
+	// Vitals' "System Monitor" button; the macOS equivalent is Activity Monitor.
+	t.actMon = systray.AddMenuItem("Open Activity Monitor", "")
+	go func() {
+		for range t.actMon.ClickedCh {
+			openActivityMonitor()
+		}
+	}()
 
 	t.buildSettings(cfg)
 
@@ -140,12 +150,20 @@ func (g *groupUI) headerTitle(aggregate string) string {
 	return title
 }
 
-// Emoji for the System and Settings items in the emoji style; the groups
-// carry their own emoji in the registry.
+// Emoji for the About, Activity Monitor and Settings items in the emoji
+// style; the groups carry their own emoji in the registry.
 const (
 	sysEmoji      = "ℹ️"
+	actMonEmoji   = "📈"
 	settingsEmoji = "🛠️"
 )
+
+// openActivityMonitor launches Activity Monitor via open(1). A failure is
+// deliberately ignored: there is nowhere to surface it from the menu, and
+// the app itself is unaffected.
+func openActivityMonitor() {
+	_ = exec.CommandContext(context.Background(), "open", "-a", "Activity Monitor").Start() //nolint:errcheck // Best-effort launch, see above.
+}
 
 // applyVisualStyle swaps the dropdown icons between the emoji and the icon
 // packs (gnome, classic). Every style puts an image on the item, so a live
@@ -155,36 +173,33 @@ const (
 // aren't re-decoded each tick.
 func (t *Tray) applyVisualStyle(cfg config.Config) {
 	style := cfg.VisualStyle
-	template := style.UsesTemplateIcons()
 
 	for gi := range t.groups {
 		g := &t.groups[gi]
-		if template {
-			setTemplateIcon(g.item, style, g.icon)
-		} else {
-			g.item.SetEmojiIcon(g.emoji)
-		}
+		applyItemStyle(g.item, style, g.icon, g.emoji)
 	}
 
-	if t.sys != nil {
-		if template {
-			setTemplateIcon(t.sys, style, icons.System)
-		} else {
-			t.sys.SetEmojiIcon(sysEmoji)
-		}
-	}
-
-	if t.settings != nil {
-		if template {
-			setTemplateIcon(t.settings, style, icons.Settings)
-		} else {
-			t.settings.SetEmojiIcon(settingsEmoji)
-		}
-	}
+	applyItemStyle(t.sys, style, icons.About, sysEmoji)
+	applyItemStyle(t.actMon, style, icons.ActivityMonitor, actMonEmoji)
+	applyItemStyle(t.settings, style, icons.Settings, settingsEmoji)
 
 	t.mu.Lock()
 	t.appliedStyle = style
 	t.mu.Unlock()
+}
+
+// applyItemStyle puts the style's visual on one menu item: the template icon
+// for the icon packs, the emoji otherwise. Not-yet-built items are skipped.
+func applyItemStyle(item *systray.MenuItem, style config.VisualStyle, key, emoji string) {
+	if item == nil {
+		return
+	}
+
+	if style.UsesTemplateIcons() {
+		setTemplateIcon(item, style, key)
+	} else {
+		item.SetEmojiIcon(emoji)
+	}
 }
 
 // setTemplateIcon guards against missing assets: no icon beats a panic on
@@ -267,6 +282,34 @@ func (t *Tray) buildSettings(cfg config.Config) { //nolint:funlen,gocognit // Se
 	barVis.KeepMenuOpen()
 	go t.watchRadio(barText, barVis, func(c *config.Config) { c.BarLabels = config.BarText })
 	go t.watchRadio(barVis, barText, func(c *config.Config) { c.BarLabels = config.BarVisual })
+
+	// public IP lookup (an outbound HTTPS request every 15 min) — opt-in
+	pubIP := s.AddSubMenuItemCheckbox("Show public IP", "", cfg.ShowPublicIP)
+
+	pubIP.KeepMenuOpen()
+	go func() {
+		for range pubIP.ClickedCh {
+			var on bool
+
+			t.updateConfig(func(c *config.Config) { c.ShowPublicIP = !c.ShowPublicIP; on = c.ShowPublicIP })
+			setChecked(pubIP, on)
+			t.refresh()
+		}
+	}()
+
+	// one extra fraction digit on values (Vitals' "use higher precision")
+	precise := s.AddSubMenuItemCheckbox("Higher precision", "", cfg.HigherPrecision)
+
+	precise.KeepMenuOpen()
+	go func() {
+		for range precise.ClickedCh {
+			var on bool
+
+			t.updateConfig(func(c *config.Config) { c.HigherPrecision = !c.HigherPrecision; on = c.HigherPrecision })
+			setChecked(precise, on)
+			t.refresh()
+		}
+	}()
 
 	// CPU sparkline in the menu bar
 	spark := s.AddSubMenuItemCheckbox("CPU sparkline in bar", "", cfg.ShowSparkline)

@@ -31,7 +31,21 @@ for svg_dir in "$svg_root"/*/; do
   done
 done
 
-# The Vitals sets have no gear; the Settings item uses an SF Symbol instead,
-# shared across every style, so it lives at the png root (not in a style dir).
-swift "$root/scripts/sfsymbol2png.swift" gearshape.fill "$png_root/settings.png" "$size"
-echo "$png_root/settings.png"
+# The Vitals sets have no power glyph. Power is a pinnable metric (its icon
+# must resolve per style like the rest), so the SF Symbol is rendered into
+# every style pack.
+for svg_dir in "$svg_root"/*/; do
+  style="$(basename "$svg_dir")"
+  swift "$root/scripts/sfsymbol2png.swift" powerplug.fill "$png_root/$style/power.png" "$size"
+  echo "$png_root/$style/power.png"
+done
+
+# The Vitals sets also have no gear, info or activity glyphs; the Settings,
+# About and Open Activity Monitor items use SF Symbols instead. These are
+# menu items only (never in the menu bar title), so one PNG is shared across
+# every style and lives at the png root (not in a style dir).
+for spec in "gearshape.fill settings" "info.circle about" "waveform.path.ecg activity"; do
+  set -- $spec
+  swift "$root/scripts/sfsymbol2png.swift" "$1" "$png_root/$2.png" "$size"
+  echo "$png_root/$2.png"
+done

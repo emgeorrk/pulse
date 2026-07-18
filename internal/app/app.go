@@ -49,6 +49,9 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) { //nolint:cy
 	if counters, err := net.Counters(); err == nil {
 		src.Net = net
 		caps.Net = true
+		// The lookup itself only runs when the user enables the metric —
+		// no network request happens at startup.
+		src.PublicIP = sensors.NewPublicIP()
 
 		for _, c := range counters {
 			// menu only lists interfaces that already had traffic at startup
@@ -62,6 +65,12 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) { //nolint:cy
 	if _, err := disk.Usage(); err == nil {
 		src.Disk = disk
 		caps.Disk = true
+	}
+
+	sys := sensors.NewSystem()
+	if _, err := sys.System(); err == nil {
+		src.System = sys
+		caps.System = true
 	}
 
 	// ── temps and voltage: Intel and Apple Silicon paths differ ──
@@ -192,16 +201,17 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 	}
 
 	dec := cfg.DecimalBytes
+	prec := cfg.HigherPrecision
 	out := os.Stdout
 
 	perCore := make([]string, len(snap.CPU.Cores))
 	for i, c := range snap.CPU.Cores {
-		perCore[i] = format.Percent(c)
+		perCore[i] = format.Percent(c, prec)
 	}
 
 	fmt.Fprintf(out, "%s · %s · macOS %s · %d cores · apple silicon: %v\n",
 		hw.Chip, hw.Model, hw.OSVersion, hw.NumCores, hw.IsAppleSilicon)
-	fmt.Fprintf(out, "CPU total: %s (over %v)\n", format.Percent(snap.CPU.Total), cfg.Interval())
+	fmt.Fprintf(out, "CPU total: %s (over %v)\n", format.Percent(snap.CPU.Total, prec), cfg.Interval())
 	fmt.Fprintf(out, "CPU cores: %s\n", strings.Join(perCore, " "))
 
 	if snap.Freq != nil {
@@ -216,18 +226,32 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 		fmt.Fprintln(out, "CPU freq: unavailable")
 	}
 
-	fmt.Fprintf(out, "Mem: used %s / %s (%s), available %s, free %s\n",
-		format.Bytes(snap.Mem.Used, dec), format.Bytes(snap.Mem.Total, dec),
-		format.Percent(snap.Mem.UsedFraction()),
-		format.Bytes(snap.Mem.Available, dec), format.Bytes(snap.Mem.Free, dec))
+	fmt.Fprintf(out, "Mem: used %s / %s (%s), available %s, free %s, cached %s\n",
+		format.Bytes(snap.Mem.Used, dec, prec), format.Bytes(snap.Mem.Total, dec, prec),
+		format.Percent(snap.Mem.UsedFraction(), prec),
+		format.Bytes(snap.Mem.Available, dec, prec), format.Bytes(snap.Mem.Free, dec, prec),
+		format.Bytes(snap.Mem.Cached, dec, prec))
 	fmt.Fprintf(out, "Swap: used %s / %s\n",
-		format.Bytes(snap.Mem.SwapUsed, dec), format.Bytes(snap.Mem.SwapTotal, dec))
+		format.Bytes(snap.Mem.SwapUsed, dec, prec), format.Bytes(snap.Mem.SwapTotal, dec, prec))
+
+	if snap.System != nil {
+		fmt.Fprintf(out, "System: load %s %s %s · up %s · %d procs · %d open files\n",
+			format.Load(snap.System.Load1), format.Load(snap.System.Load5),
+			format.Load(snap.System.Load15), format.Uptime(snap.System.UptimeSec),
+			snap.System.Procs, snap.System.OpenFiles)
+	} else {
+		fmt.Fprintln(out, "System: unavailable")
+	}
 
 	if snap.Net != nil {
-		fmt.Fprintf(out, "Net: ↓%s ↑%s", format.Speed(snap.Net.Down), format.Speed(snap.Net.Up))
+		fmt.Fprintf(out, "Net: ↓%s ↑%s", format.Speed(snap.Net.Down, prec), format.Speed(snap.Net.Up, prec))
 
 		for _, i := range snap.Net.Ifaces {
-			fmt.Fprintf(out, " · %s ↓%s ↑%s", i.Name, format.SpeedShort(i.Down), format.SpeedShort(i.Up))
+			fmt.Fprintf(out, " · %s ↓%s ↑%s", i.Name, format.SpeedShort(i.Down, prec), format.SpeedShort(i.Up, prec))
+		}
+
+		if snap.Net.PublicIP != "" {
+			fmt.Fprintf(out, " · public IP %s", format.WithFlag(snap.Net.PublicIP, snap.Net.IPCountry))
 		}
 
 		fmt.Fprintln(out)
@@ -237,23 +261,25 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 
 	if snap.Disk != nil {
 		fmt.Fprintf(out, "Disk: used %s / %s (%s), free %s · R %s W %s · boot R %s W %s\n",
-			format.Bytes(snap.Disk.Used, dec), format.Bytes(snap.Disk.Total, dec),
-			format.Percent(snap.Disk.UsedFraction()), format.Bytes(snap.Disk.Available, dec),
-			format.Speed(snap.Disk.ReadRate), format.Speed(snap.Disk.WriteRate),
-			format.Bytes(snap.Disk.ReadTotal, dec), format.Bytes(snap.Disk.WriteTotal, dec))
+			format.Bytes(snap.Disk.Used, dec, prec), format.Bytes(snap.Disk.Total, dec, prec),
+			format.Percent(snap.Disk.UsedFraction(), prec), format.Bytes(snap.Disk.Available, dec, prec),
+			format.Speed(snap.Disk.ReadRate, prec), format.Speed(snap.Disk.WriteRate, prec),
+			format.Bytes(snap.Disk.ReadTotal, dec, prec), format.Bytes(snap.Disk.WriteTotal, dec, prec))
 	} else {
 		fmt.Fprintln(out, "Disk: unavailable")
 	}
 
 	f := cfg.TempUnit == config.Fahrenheit
 	if snap.Temps != nil {
-		fmt.Fprintf(out, "Temp: CPU %s · GPU %s · hottest %s (%s) · %d sensors\n",
-			format.Temp(snap.Temps.CPU, f), format.Temp(snap.Temps.GPU, f),
-			format.Temp(snap.Temps.Hottest.Value, f), snap.Temps.Hottest.Name,
+		fmt.Fprintf(out, "Temp: CPU %s · GPU %s · avg %s · hottest %s (%s) · coolest %s (%s) · %d sensors\n",
+			format.Temp(snap.Temps.CPU, f, prec), format.Temp(snap.Temps.GPU, f, prec),
+			format.Temp(snap.Temps.Avg, f, prec),
+			format.Temp(snap.Temps.Hottest.Value, f, prec), snap.Temps.Hottest.Name,
+			format.Temp(snap.Temps.Coolest.Value, f, prec), snap.Temps.Coolest.Name,
 			len(snap.Temps.All))
 
 		for _, r := range snap.Temps.All {
-			fmt.Fprintf(out, "  %-40s %s\n", r.Name, format.Temp(r.Value, f))
+			fmt.Fprintf(out, "  %-40s %s\n", r.Name, format.Temp(r.Value, f, prec))
 		}
 	} else {
 		fmt.Fprintln(out, "Temp: unavailable")
@@ -279,7 +305,7 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 	}
 
 	if snap.GPU != nil {
-		fmt.Fprintf(out, "GPU: %s\n", format.Percent(snap.GPU.Utilization))
+		fmt.Fprintf(out, "GPU: %s\n", format.Percent(snap.GPU.Utilization, prec))
 	} else {
 		fmt.Fprintln(out, "GPU: unavailable")
 	}
@@ -303,8 +329,8 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 		}
 
 		fmt.Fprintf(out, "Battery: %s (%s) · health %s · %d cycles · %s · %s · %s\n",
-			format.Percent(b.Percent), state, format.Percent(b.Health), b.Cycles,
-			format.Temp(b.TempC, f), format.Volts(b.Volts), format.Watts(b.Watts))
+			format.Percent(b.Percent, prec), state, format.Percent(b.Health, prec), b.Cycles,
+			format.Temp(b.TempC, f, prec), format.Volts(b.Volts), format.Watts(b.Watts))
 	} else {
 		fmt.Fprintln(out, "Battery: unavailable")
 	}

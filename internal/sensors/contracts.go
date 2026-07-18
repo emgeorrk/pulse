@@ -7,7 +7,11 @@ package sensors
 
 //go:generate go tool mockgen -source=contracts.go -destination=mocks/sensors.go -package=mocks
 
-import "github.com/emgeorrk/pulse/internal/entity"
+import (
+	"context"
+
+	"github.com/emgeorrk/pulse/internal/entity"
+)
 
 // CPUSource returns cumulative per-core load ticks; usecase computes load
 // from the delta between two reads.
@@ -49,6 +53,19 @@ type FanSource interface {
 	Fans() ([]entity.Fan, error)
 }
 
+// SystemSource returns system-wide state: load averages, uptime, process
+// and open-file counts (sysctl + libproc).
+type SystemSource interface {
+	System() (entity.SystemStats, error)
+}
+
+// PublicIPSource looks up the machine's public IP address (HTTPS providers).
+// Unlike the hardware sources it is queried on its own slow schedule, and
+// only when the user enables the metric.
+type PublicIPSource interface {
+	Fetch(ctx context.Context) (entity.PublicIPInfo, error)
+}
+
 // BatterySource returns battery state (IORegistry AppleSmartBattery).
 type BatterySource interface {
 	Battery() (entity.BatteryStats, error)
@@ -74,15 +91,17 @@ type FreqSource interface {
 // Sources holds the sources collected at startup; nil means unavailable on
 // this hardware (its group is hidden). CPU and Mem are mandatory.
 type Sources struct {
-	CPU     CPUSource
-	Mem     MemSource
-	Net     NetSource
-	Disk    DiskSource
-	Temp    TempSource
-	Volt    VoltSource
-	Fan     FanSource
-	Battery BatterySource
-	GPU     GPUSource
-	Power   PowerSource
-	Freq    FreqSource
+	CPU      CPUSource
+	Mem      MemSource
+	Net      NetSource
+	Disk     DiskSource
+	Temp     TempSource
+	Volt     VoltSource
+	Fan      FanSource
+	Battery  BatterySource
+	GPU      GPUSource
+	Power    PowerSource
+	Freq     FreqSource
+	System   SystemSource
+	PublicIP PublicIPSource
 }

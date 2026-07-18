@@ -54,14 +54,16 @@ const (
 )
 
 type Config struct {
-	TempUnit      TempUnit          `json:"temp_unit"`
-	VisualStyle   VisualStyle       `json:"visual_style"`
-	BarLabels     BarLabelStyle     `json:"bar_labels"`
-	Pinned        []entity.MetricID `json:"pinned"`
-	IntervalSec   int               `json:"interval_sec"`
-	DecimalBytes  bool              `json:"decimal_bytes"`
-	ShowSparkline bool              `json:"show_sparkline"`
-	StartAtLogin  bool              `json:"start_at_login"`
+	TempUnit        TempUnit          `json:"temp_unit"`
+	VisualStyle     VisualStyle       `json:"visual_style"`
+	BarLabels       BarLabelStyle     `json:"bar_labels"`
+	Pinned          []entity.MetricID `json:"pinned"`
+	IntervalSec     int               `json:"interval_sec"`
+	DecimalBytes    bool              `json:"decimal_bytes"`
+	ShowSparkline   bool              `json:"show_sparkline"`
+	StartAtLogin    bool              `json:"start_at_login"`
+	HigherPrecision bool              `json:"higher_precision"`
+	ShowPublicIP    bool              `json:"show_public_ip"`
 }
 
 func defaults() Config {

@@ -98,6 +98,7 @@ point. Handle fanless models (MacBook Air) — no fan sensors, hide the section.
 | Fans | SMC `F%dAc`, type `flt ` LE | SMC, `fpe2` big-endian — **untested** |
 | Power | IOReport Energy Model | — |
 | CPU freq | IOReport perf states × device-tree freq tables | — |
+| System (load, uptime, procs, open files) | sysctl `vm.loadavg`/`kern.boottime`/`kern.num_files` + libproc `proc_listallpids` | same |
 
 The Intel SMC paths were written from references (iSMC, VirtualSMC docs) and are
 **unverified on real Intel hardware**. Tested on: **Mac17,8 MacBook Pro, Apple
