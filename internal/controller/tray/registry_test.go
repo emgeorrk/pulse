@@ -172,7 +172,7 @@ func TestNewRegistersAllMetricsAsPinnable(t *testing.T) {
 		t.Errorf("bar has %d metrics, groups have %d", len(tr.bar), total)
 	}
 
-	for _, id := range []entity.MetricID{"disk.free", "temp.hottest", "mem.available", "cpu.core.1", "temp.sensor.PMU tdie0"} {
+	for _, id := range []entity.MetricID{"disk.free", "temp.hottest", "mem.available", "cpu.core.1", "temp.sensor.PMU tdie0", "batt.raw"} {
 		if _, ok := tr.bar[id]; !ok {
 			t.Errorf("%s missing from the bar map", id)
 		}
@@ -198,7 +198,7 @@ func sampleSnapshot() entity.Snapshot {
 		},
 		Volts:   []entity.Reading{{Name: "PMU vbus", Value: 13.08}},
 		Fans:    []entity.Fan{{Name: "Fan 1", RPM: 1850, Max: 5000}},
-		Battery: &entity.BatteryStats{Percent: 0.87, Health: 0.95, Cycles: 120, TempC: 32, Volts: 12.3, Watts: -8.4, MinutesLeft: 185},
+		Battery: &entity.BatteryStats{Percent: 0.87, RawPercent: 0.85, Health: 0.95, Cycles: 120, TempC: 32, Volts: 12.3, Watts: -8.4, MinutesLeft: 185},
 		GPU:     &entity.GPUStats{Utilization: 0.33},
 		Power:   &entity.PowerStats{CPU: 2.1, GPU: 1.2, ANE: 0.1, Total: 3.4},
 		Freq: &entity.FreqStats{
@@ -210,7 +210,7 @@ func sampleSnapshot() entity.Snapshot {
 
 // fallbackSnapshot drives the non-nil-but-alternate branches: temps with no
 // CPU/GPU aggregate (hottest fallback), a fan with no rated max, and a
-// battery on AC with unknown health/time.
+// battery on AC with unknown health/raw charge/time.
 func fallbackSnapshot() entity.Snapshot {
 	return entity.Snapshot{
 		CPU:  entity.CPUStats{Total: 0.1, Cores: []float64{0.1, 0.1}},

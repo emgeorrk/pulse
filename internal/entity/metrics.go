@@ -150,7 +150,8 @@ type Fan struct {
 
 // BatteryStats holds battery state from IORegistry (AppleSmartBattery).
 type BatteryStats struct {
-	Percent     float64 // 0..1
+	Percent     float64 // 0..1, the smoothed state of charge macOS displays
+	RawPercent  float64 // 0..1, raw capacity ratio in mAh — trails Percent by 1–3%
 	Health      float64 // 0..1, actual capacity vs rated capacity
 	Cycles      int
 	TempC       float64

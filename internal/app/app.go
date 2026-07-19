@@ -328,8 +328,9 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 			state = "AC"
 		}
 
-		fmt.Fprintf(out, "Battery: %s (%s) · health %s · %d cycles · %s · %s · %s\n",
-			format.Percent(b.Percent, prec), state, format.Percent(b.Health, prec), b.Cycles,
+		fmt.Fprintf(out, "Battery: %s (raw %s) (%s) · health %s · %d cycles · %s · %s · %s\n",
+			format.Percent(b.Percent, prec), format.Percent(b.RawPercent, prec), state,
+			format.Percent(b.Health, prec), b.Cycles,
 			format.Temp(b.TempC, f, prec), format.Volts(b.Volts), format.Watts(b.Watts))
 	} else {
 		fmt.Fprintln(out, "Battery: unavailable")
