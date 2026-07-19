@@ -3,26 +3,14 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       id-token: write
 
     steps:
@@ -36,10 +24,43 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*)"'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
 
+          # Posts a tracking comment on the PR and updates it with the result,
+          # so a run can never finish silently.
+          track_progress: true
+
+          # NOTE: the code-review plugin (`/code-review:code-review`) is broken
+          # when invoked via `prompt` in claude-code-action@v1 — the Skill call
+          # fails instantly and the session ends without posting anything (see
+          # anthropics/claude-code-action#1458, #1145). Until that is fixed,
+          # the review instructions live directly in the prompt, mirroring the
+          # official pr-review-comprehensive.yml example.
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Perform a code review of this pull request:
+
+            1. Use `gh pr view` and `gh pr diff` to get the PR description and
+               the changed code. If the PR is a draft or Claude has already
+               reviewed this revision, stop without commenting.
+            2. Review only the code introduced by the diff for:
+               - Bugs: logic errors, code that fails to compile, wrong results
+               - Violations of the conventions in CLAUDE.md (e.g. sentinel
+                 errors only, `//go:build darwin` tags, table-driven tests,
+                 capability gating — hide, don't crash)
+               - Security issues in the changed code
+            3. Flag only HIGH-SIGNAL issues you are certain about. Do NOT flag
+               style nitpicks, pre-existing issues, things a linter will catch,
+               or speculative problems that depend on unknown inputs. False
+               positives erode trust.
+            4. Post each confirmed issue as an inline comment using
+               mcp__github_inline_comment__create_inline_comment, with a brief
+               description and, for small self-contained fixes, a committable
+               suggestion block.
+            5. Finish with a single summary comment via `gh pr comment`. If
+               nothing was found, post exactly: "No issues found. Checked for
+               bugs and CLAUDE.md compliance."
+
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
