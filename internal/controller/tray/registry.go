@@ -500,6 +500,18 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 				},
 			},
 			{
+				id:    "batt.raw",
+				label: "Raw charge",
+				tag:   "RAW ",
+				menu: func(s entity.Snapshot, c config.Config) string {
+					if s.Battery == nil || s.Battery.RawPercent == 0 {
+						return "—"
+					}
+
+					return format.Percent(s.Battery.RawPercent, c.HigherPrecision)
+				},
+			},
+			{
 				id:    "batt.state",
 				label: "State",
 				menu: func(s entity.Snapshot, c config.Config) string {

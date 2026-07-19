@@ -82,13 +82,24 @@ func (*Batt) Battery() (entity.BatteryStats, error) {
 		External: b.externalConnected != 0,
 	}
 
-	// Percent: on Apple Silicon CurrentCapacity is already 0–100, on Intel
-	// it's mAh; the raw mAh keys work the same everywhere, so prefer them.
+	// Percent is what the macOS menu bar shows: the fuel gauge's smoothed
+	// state of charge (CurrentCapacity, 0–100 on Apple Silicon; mAh on Intel,
+	// where the ratio is still a valid fraction). RawPercent is the plain mAh
+	// ratio — the gauge holds back reserve capacity and smooths near full, so
+	// it trails Percent by 1–3%. Each pair of keys is optional; fall back to
+	// the other.
 	switch {
-	case b.rawMax > 0:
-		st.Percent = float64(b.rawCurrent) / float64(b.rawMax)
 	case b.maxCapacity > 0:
 		st.Percent = float64(b.currentCapacity) / float64(b.maxCapacity)
+	case b.rawMax > 0:
+		st.Percent = float64(b.rawCurrent) / float64(b.rawMax)
+	}
+
+	switch {
+	case b.rawMax > 0:
+		st.RawPercent = float64(b.rawCurrent) / float64(b.rawMax)
+	case b.maxCapacity > 0:
+		st.RawPercent = float64(b.currentCapacity) / float64(b.maxCapacity)
 	}
 	if b.designCapacity > 0 && b.rawMax > 0 {
 		st.Health = float64(b.rawMax) / float64(b.designCapacity)
