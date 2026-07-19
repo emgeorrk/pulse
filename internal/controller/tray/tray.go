@@ -210,172 +210,186 @@ func setTemplateIcon(item *systray.MenuItem, style config.VisualStyle, key strin
 	}
 }
 
-func (t *Tray) buildSettings(cfg config.Config) { //nolint:funlen,gocognit // Settings construction mirrors the menu hierarchy.
+// The Settings dropdown: every multi-choice setting is a submenu whose
+// parent row carries the current value ("Temperature: °C"), the boolean
+// toggles stay flat, and separators split the choice / toggle / login blocks.
+func (t *Tray) buildSettings(cfg config.Config) {
 	s := systray.AddMenuItem("Settings", "")
 	t.settings = s
 
-	// update interval — radio group
-	intervals := []int{1, 2, 3, 5}
+	t.addRadioGroup(s, "Update interval", intervalOptions(cfg))
+	t.addRadioGroup(s, "Temperature", tempOptions(cfg))
+	t.addRadioGroup(s, "Memory units", memoryOptions(cfg))
+	t.addRadioGroup(s, iconsLabel, iconOptions(cfg))
+	t.addRadioGroup(s, "Bar labels", barLabelOptions(cfg))
 
-	var intervalItems []*systray.MenuItem
+	s.AddSeparator()
 
-	for _, sec := range intervals {
-		label := formatSeconds(sec)
-		it := s.AddSubMenuItemCheckbox("Update: "+label, "", cfg.IntervalSec == sec)
-		it.KeepMenuOpen()
+	// public IP is opt-in: it costs an outbound HTTPS request every 15 min
+	t.addToggle(s, "Show public IP", cfg.ShowPublicIP, func(c *config.Config) *bool { return &c.ShowPublicIP })
+	t.addToggle(s, "Higher precision", cfg.HigherPrecision, func(c *config.Config) *bool { return &c.HigherPrecision })
+	t.addToggle(s, "CPU sparkline in bar", cfg.ShowSparkline, func(c *config.Config) *bool { return &c.ShowSparkline })
 
-		intervalItems = append(intervalItems, it)
-		go func(me *systray.MenuItem) {
-			for range me.ClickedCh {
-				t.updateConfig(func(c *config.Config) { c.IntervalSec = sec })
+	s.AddSeparator()
 
-				for _, other := range intervalItems {
-					other.Uncheck()
-				}
-
-				me.Check()
-			}
-		}(it)
-	}
-
-	// temperature unit — radio group (relevant since the temps feature)
-	tempC := s.AddSubMenuItemCheckbox("Temperature: °C", "", cfg.TempUnit == config.Celsius)
-	tempF := s.AddSubMenuItemCheckbox("Temperature: °F", "", cfg.TempUnit == config.Fahrenheit)
-
-	tempC.KeepMenuOpen()
-
-	tempF.KeepMenuOpen()
-	go t.watchRadio(tempC, tempF, func(c *config.Config) { c.TempUnit = config.Celsius })
-	go t.watchRadio(tempF, tempC, func(c *config.Config) { c.TempUnit = config.Fahrenheit })
-
-	// memory unit — radio group
-	binU := s.AddSubMenuItemCheckbox("Memory: GiB", "", !cfg.DecimalBytes)
-	decU := s.AddSubMenuItemCheckbox("Memory: GB", "", cfg.DecimalBytes)
-
-	binU.KeepMenuOpen()
-
-	decU.KeepMenuOpen()
-	go t.watchRadio(binU, decU, func(c *config.Config) { c.DecimalBytes = false })
-	go t.watchRadio(decU, binU, func(c *config.Config) { c.DecimalBytes = true })
-
-	// visual style — radio group; render picks up the change and swaps the
-	// dropdown icons via applyVisualStyle
-	visEmoji := s.AddSubMenuItemCheckbox("Icons: Emoji", "", cfg.VisualStyle == config.VisualEmoji)
-	visGnome := s.AddSubMenuItemCheckbox("Icons: GNOME", "", cfg.VisualStyle == config.VisualGnome)
-	visClassic := s.AddSubMenuItemCheckbox("Icons: Classic", "", cfg.VisualStyle == config.VisualClassic)
-
-	visEmoji.KeepMenuOpen()
-
-	visGnome.KeepMenuOpen()
-
-	visClassic.KeepMenuOpen()
-	go t.watchRadioN(visEmoji, []*systray.MenuItem{visGnome, visClassic}, func(c *config.Config) { c.VisualStyle = config.VisualEmoji })
-	go t.watchRadioN(visGnome, []*systray.MenuItem{visEmoji, visClassic}, func(c *config.Config) { c.VisualStyle = config.VisualGnome })
-	go t.watchRadioN(visClassic, []*systray.MenuItem{visEmoji, visGnome}, func(c *config.Config) { c.VisualStyle = config.VisualClassic })
-
-	// bar label style — radio group
-	barText := s.AddSubMenuItemCheckbox("Bar labels: Text", "", cfg.BarLabels == config.BarText)
-	barVis := s.AddSubMenuItemCheckbox("Bar labels: Icons", "", cfg.BarLabels == config.BarVisual)
-
-	barText.KeepMenuOpen()
-
-	barVis.KeepMenuOpen()
-	go t.watchRadio(barText, barVis, func(c *config.Config) { c.BarLabels = config.BarText })
-	go t.watchRadio(barVis, barText, func(c *config.Config) { c.BarLabels = config.BarVisual })
-
-	// public IP lookup (an outbound HTTPS request every 15 min) — opt-in
-	pubIP := s.AddSubMenuItemCheckbox("Show public IP", "", cfg.ShowPublicIP)
-
-	pubIP.KeepMenuOpen()
-	go func() {
-		for range pubIP.ClickedCh {
-			var on bool
-
-			t.updateConfig(func(c *config.Config) { c.ShowPublicIP = !c.ShowPublicIP; on = c.ShowPublicIP })
-			setChecked(pubIP, on)
-			t.refresh()
-		}
-	}()
-
-	// one extra fraction digit on values (Vitals' "use higher precision")
-	precise := s.AddSubMenuItemCheckbox("Higher precision", "", cfg.HigherPrecision)
-
-	precise.KeepMenuOpen()
-	go func() {
-		for range precise.ClickedCh {
-			var on bool
-
-			t.updateConfig(func(c *config.Config) { c.HigherPrecision = !c.HigherPrecision; on = c.HigherPrecision })
-			setChecked(precise, on)
-			t.refresh()
-		}
-	}()
-
-	// CPU sparkline in the menu bar
-	spark := s.AddSubMenuItemCheckbox("CPU sparkline in bar", "", cfg.ShowSparkline)
-
-	spark.KeepMenuOpen()
-	go func() {
-		for range spark.ClickedCh {
-			var on bool
-
-			t.updateConfig(func(c *config.Config) { c.ShowSparkline = !c.ShowSparkline; on = c.ShowSparkline })
-			setChecked(spark, on)
-			t.refresh()
-		}
-	}()
-
-	// start at login
 	login := s.AddSubMenuItemCheckbox("Start at login", "", cfg.StartAtLogin)
 
 	login.KeepMenuOpen()
+	go t.watchLogin(login)
+}
+
+// radioOption is one selectable leaf of a settings radio submenu.
+type radioOption struct {
+	apply   func(*config.Config)
+	label   string
+	checked bool
+}
+
+// labelSep joins a menu label with its value: "Temperature: °C".
+const labelSep = ": "
+
+// iconsLabel doubles as the visual-style group title and a Bar labels option.
+const iconsLabel = "Icons"
+
+func settingTitle(prefix, value string) string {
+	return prefix + labelSep + value
+}
+
+// addRadioGroup builds one "<prefix>: <current>" submenu row under parent.
+// The leaves are keep-open checkboxes forming a radio group: selecting one
+// applies its config change, moves the check, and retitles the parent row.
+// The parent itself must stay a plain submenu anchor — KeepMenuOpen is
+// leaf-only, and the systray PATCH already makes clicking it action-free.
+func (t *Tray) addRadioGroup(parent *systray.MenuItem, prefix string, opts []radioOption) {
+	current := opts[0].label
+
+	for _, o := range opts {
+		if o.checked {
+			current = o.label
+		}
+	}
+
+	head := parent.AddSubMenuItem(settingTitle(prefix, current), "")
+
+	items := make([]*systray.MenuItem, len(opts))
+	for i, o := range opts {
+		it := head.AddSubMenuItemCheckbox(o.label, "", o.checked)
+		it.KeepMenuOpen()
+
+		items[i] = it
+	}
+
+	for i, o := range opts { // watchers only after items is fully populated
+		go t.watchRadioChoice(head, prefix, items, i, o)
+	}
+}
+
+// watchRadioChoice reacts to clicks on option i of a radio submenu.
+func (t *Tray) watchRadioChoice(head *systray.MenuItem, prefix string, items []*systray.MenuItem, i int, opt radioOption) {
+	for range items[i].ClickedCh {
+		t.updateConfig(opt.apply)
+
+		for j, it := range items {
+			setChecked(it, j == i)
+		}
+
+		head.SetTitle(settingTitle(prefix, opt.label))
+		t.refresh()
+	}
+}
+
+func intervalOptions(cfg config.Config) []radioOption {
+	intervals := []int{1, 2, 3, 5}
+	opts := make([]radioOption, 0, len(intervals))
+
+	for _, sec := range intervals {
+		opts = append(opts, radioOption{
+			label:   formatSeconds(sec),
+			checked: cfg.IntervalSec == sec,
+			apply:   func(c *config.Config) { c.IntervalSec = sec },
+		})
+	}
+
+	return opts
+}
+
+func tempOptions(cfg config.Config) []radioOption {
+	return []radioOption{
+		{label: "°C", checked: cfg.TempUnit == config.Celsius, apply: func(c *config.Config) { c.TempUnit = config.Celsius }},
+		{label: "°F", checked: cfg.TempUnit == config.Fahrenheit, apply: func(c *config.Config) { c.TempUnit = config.Fahrenheit }},
+	}
+}
+
+func memoryOptions(cfg config.Config) []radioOption {
+	return []radioOption{
+		{label: "GiB", checked: !cfg.DecimalBytes, apply: func(c *config.Config) { c.DecimalBytes = false }},
+		{label: "GB", checked: cfg.DecimalBytes, apply: func(c *config.Config) { c.DecimalBytes = true }},
+	}
+}
+
+// iconOptions: render picks the change up via refresh and swaps the dropdown
+// icons once through applyVisualStyle.
+func iconOptions(cfg config.Config) []radioOption {
+	return []radioOption{
+		{label: "Emoji", checked: cfg.VisualStyle == config.VisualEmoji, apply: func(c *config.Config) { c.VisualStyle = config.VisualEmoji }},
+		{label: "GNOME", checked: cfg.VisualStyle == config.VisualGnome, apply: func(c *config.Config) { c.VisualStyle = config.VisualGnome }},
+		{label: "Classic", checked: cfg.VisualStyle == config.VisualClassic, apply: func(c *config.Config) { c.VisualStyle = config.VisualClassic }},
+	}
+}
+
+func barLabelOptions(cfg config.Config) []radioOption {
+	return []radioOption{
+		{label: "Text", checked: cfg.BarLabels == config.BarText, apply: func(c *config.Config) { c.BarLabels = config.BarText }},
+		{label: iconsLabel, checked: cfg.BarLabels == config.BarVisual, apply: func(c *config.Config) { c.BarLabels = config.BarVisual }},
+	}
+}
+
+// addToggle builds one flat keep-open checkbox row; field selects the bool
+// to flip on click.
+func (t *Tray) addToggle(parent *systray.MenuItem, title string, checked bool, field func(*config.Config) *bool) {
+	it := parent.AddSubMenuItemCheckbox(title, "", checked)
+	it.KeepMenuOpen()
+
 	go func() {
-		for range login.ClickedCh {
+		for range it.ClickedCh {
 			var on bool
 
-			t.updateConfig(func(c *config.Config) { c.StartAtLogin = !c.StartAtLogin; on = c.StartAtLogin })
-
-			var err error
-			if on {
-				err = autostart.Enable()
-			} else {
-				err = autostart.Disable()
-			}
-
-			if err != nil { // rollback: couldn't write the LaunchAgent — don't lie with the checkbox
-				t.updateConfig(func(c *config.Config) { c.StartAtLogin = !on })
-
-				on = !on
-			}
-
-			setChecked(login, on)
+			t.updateConfig(func(c *config.Config) {
+				p := field(c)
+				*p = !*p
+				on = *p
+			})
+			setChecked(it, on)
+			t.refresh()
 		}
 	}()
 }
 
-// watchRadio: clicking me checks it, unchecks other, and applies apply.
-func (t *Tray) watchRadio(me, other *systray.MenuItem, apply func(*config.Config)) {
-	for range me.ClickedCh {
-		t.updateConfig(apply)
-		me.Check()
-		other.Uncheck()
-		t.refresh()
+// watchLogin flips StartAtLogin and writes/removes the LaunchAgent. A write
+// failure rolls the setting back so the checkbox never lies.
+func (t *Tray) watchLogin(login *systray.MenuItem) {
+	for range login.ClickedCh {
+		var on bool
+
+		t.updateConfig(func(c *config.Config) { c.StartAtLogin = !c.StartAtLogin; on = c.StartAtLogin })
+
+		if err := applyAutostart(on); err != nil {
+			t.updateConfig(func(c *config.Config) { c.StartAtLogin = !on })
+
+			on = !on
+		}
+
+		setChecked(login, on)
 	}
 }
 
-// watchRadioN is watchRadio for a group of more than two options: clicking me
-// checks it, unchecks every other item, and applies apply.
-func (t *Tray) watchRadioN(me *systray.MenuItem, others []*systray.MenuItem, apply func(*config.Config)) {
-	for range me.ClickedCh {
-		t.updateConfig(apply)
-		me.Check()
-
-		for _, other := range others {
-			other.Uncheck()
-		}
-
-		t.refresh()
+// applyAutostart enables or disables the LaunchAgent.
+func applyAutostart(on bool) error {
+	if on {
+		return autostart.Enable()
 	}
+
+	return autostart.Disable()
 }
 
 func (t *Tray) updateConfig(apply func(*config.Config)) {
@@ -489,7 +503,7 @@ func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are im
 
 		for i := range g.metrics {
 			m := &g.metrics[i]
-			g.rows[i].SetTitle(m.label + ": " + m.menu(s, cfg))
+			g.rows[i].SetTitle(m.label + labelSep + m.menu(s, cfg))
 		}
 	}
 }

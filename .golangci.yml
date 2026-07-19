@@ -79,6 +79,9 @@ linters:
     goconst:
       min-len: 2
       min-occurrences: 2
+      # tests are excluded from linting wholesale (see exclusions.paths), so
+      # they must not count toward literal occurrences either
+      ignore-tests: true
     gocritic:
       settings:
         hugeParam:
