@@ -4,9 +4,14 @@
 // detailed set). Only the alpha channel matters: menu items draw them as
 // macOS template images, and the menu bar title tints them to the text color
 // at draw time, so the glyphs adapt to light/dark menu bars automatically.
+// The one exception is the country flags (png/flags): full-color images
+// shared by both icon-pack styles, drawn untinted next to the public IP.
 package icons
 
-import "embed"
+import (
+	"embed"
+	"strings"
+)
 
 //go:embed png
 var pngs embed.FS
@@ -55,6 +60,35 @@ func MetricKeys() []string {
 // by style keeps the two packs' icons distinct in the systray title registry.
 func TitleKey(style, key string) string {
 	return style + "/" + key
+}
+
+// FlagKeyPrefix namespaces flag title-icon keys ("flag/us") apart from the
+// style/metric keys ("gnome/cpu").
+const FlagKeyPrefix = "flag/"
+
+// countryCodeLen is the length of an ISO 3166-1 alpha-2 country code.
+const countryCodeLen = 2
+
+// FlagPNG returns the full-color flag PNG for an ISO 3166-1 alpha-2 country
+// code (case-insensitive), or nil when the code or its asset is unknown —
+// callers fall back to the group icon / bare text. One flag set (the Vitals
+// 1x1 pack) is shared by the gnome and classic styles.
+func FlagPNG(cc string) []byte {
+	if len(cc) != countryCodeLen {
+		return nil
+	}
+
+	b, err := pngs.ReadFile("png/flags/" + strings.ToLower(cc) + ".png")
+	if err != nil {
+		return nil
+	}
+
+	return b
+}
+
+// FlagTitleKey is the menu-bar title-icon id for a country flag.
+func FlagTitleKey(cc string) string {
+	return FlagKeyPrefix + strings.ToLower(cc)
 }
 
 // PNG returns the embedded template PNG for a style's key, or nil if it is

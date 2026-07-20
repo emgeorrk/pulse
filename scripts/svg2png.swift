@@ -9,7 +9,13 @@ guard args.count == 4, let size = Int(args[3]) else {
     FileHandle.standardError.write("usage: svg2png <in.svg> <out.png> <size>\n".data(using: .utf8)!)
     exit(2)
 }
-let data = try Data(contentsOf: URL(fileURLWithPath: args[1]))
+// Errors thrown from top-level code under `swift <file>` (immediate mode)
+// trap the whole swift-frontend process — the shell sees "Trace/BPT trap",
+// not a diagnostic — so failures must be caught and reported here.
+guard let data = try? Data(contentsOf: URL(fileURLWithPath: args[1])) else {
+    FileHandle.standardError.write("cannot read \(args[1])\n".data(using: .utf8)!)
+    exit(1)
+}
 guard let img = NSImage(data: data) else {
     FileHandle.standardError.write("cannot decode \(args[1])\n".data(using: .utf8)!)
     exit(1)
@@ -23,4 +29,9 @@ NSGraphicsContext.current?.imageInterpolation = .high
 img.draw(in: NSRect(x: 0, y: 0, width: size, height: size),
          from: .zero, operation: .sourceOver, fraction: 1.0)
 NSGraphicsContext.restoreGraphicsState()
-try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+do {
+    try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+} catch {
+    FileHandle.standardError.write("cannot write \(args[2]): \(error.localizedDescription)\n".data(using: .utf8)!)
+    exit(1)
+}

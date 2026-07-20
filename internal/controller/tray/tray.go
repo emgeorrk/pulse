@@ -32,10 +32,13 @@ type Tray struct { //nolint:govet // Field order follows UI lifecycle and state 
 	last         entity.Snapshot
 	store        *config.Store
 	bar          map[entity.MetricID]metric
+	titleFlags   map[string]bool // flag title icons already registered
 	sys          *systray.MenuItem
 	actMon       *systray.MenuItem
 	settings     *systray.MenuItem
+	ipRow        *systray.MenuItem
 	appliedStyle config.VisualStyle
+	ipFlagCC     string // country of the flag on ipRow ("" = none), lowercase
 	groups       []groupUI
 	hw           entity.HWInfo
 	mu           sync.Mutex
@@ -44,7 +47,7 @@ type Tray struct { //nolint:govet // Field order follows UI lifecycle and state 
 }
 
 func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
-	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}, loading: true}
+	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}, titleFlags: map[string]bool{}, loading: true}
 
 	groups := buildGroups(hw, caps)
 	for groupIndex := range groups {
@@ -96,6 +99,10 @@ func (t *Tray) build() {
 
 			it.KeepMenuOpen() // pinning several metrics in one menu open
 			go t.watchPin(m.id, it)
+
+			if m.id == metricNetworkIP {
+				t.ipRow = it // carries the country flag in the icon-pack styles
+			}
 
 			g.rows = append(g.rows, it)
 		}
@@ -491,6 +498,8 @@ func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are im
 		t.applyVisualStyle(cfg)
 	}
 
+	t.updateIPFlag(s, cfg)
+
 	if !loading { // while loading, the heartbeat animation owns the title
 		t.setTitle(s, cfg)
 	}
@@ -508,6 +517,60 @@ func (t *Tray) render(s entity.Snapshot) { //nolint:gocritic // Snapshots are im
 	}
 }
 
+// updateIPFlag mirrors the country flag onto the Public IP row's image in
+// the icon-pack styles (the emoji style keeps the flag in the row text).
+// The last applied code is cached so ticks don't re-decode the image; the
+// flag set is style-independent, so a gnome↔classic switch is a no-op.
+func (t *Tray) updateIPFlag(s entity.Snapshot, cfg config.Config) { //nolint:gocritic // Snapshot values are immutable render inputs.
+	if t.ipRow == nil {
+		return
+	}
+
+	var cc string
+	if cfg.VisualStyle.UsesTemplateIcons() && s.Net != nil && icons.FlagPNG(s.Net.IPCountry) != nil {
+		cc = strings.ToLower(s.Net.IPCountry)
+	}
+
+	t.mu.Lock()
+	changed := t.ipFlagCC != cc
+	t.ipFlagCC = cc
+	t.mu.Unlock()
+
+	if !changed {
+		return
+	}
+
+	if cc == "" {
+		t.ipRow.ClearIcon()
+
+		return
+	}
+
+	t.ipRow.SetIcon(icons.FlagPNG(cc))
+}
+
+// ensureTitleIcon lazily registers a country flag as a color title icon the
+// first time it is referenced — at most a handful of countries per session,
+// versus decoding all 257 flags up front. The style packs are registered in
+// build. Registration and the SetTitleParts that references it both run on
+// the main thread (wait:YES), so the order holds from any goroutine.
+func (t *Tray) ensureTitleIcon(key string) {
+	if !strings.HasPrefix(key, icons.FlagKeyPrefix) {
+		return
+	}
+
+	t.mu.Lock()
+	seen := t.titleFlags[key]
+	t.titleFlags[key] = true
+	t.mu.Unlock()
+
+	if seen {
+		return
+	}
+
+	systray.RegisterColorTitleIcon(key, icons.FlagPNG(strings.TrimPrefix(key, icons.FlagKeyPrefix)))
+}
+
 // setTitle renders the pinned metrics into the status item. Only an icon
 // pack in visual mode needs the attributed-title path; everything else
 // (text mode, emoji) stays a plain string.
@@ -520,6 +583,7 @@ func (t *Tray) setTitle(s entity.Snapshot, cfg config.Config) { //nolint:cyclop,
 	for _, id := range cfg.Pinned {
 		if m, ok := t.bar[id]; ok {
 			iconKey, text := m.barPart(s, cfg)
+			t.ensureTitleIcon(iconKey)
 			parts = append(parts, systray.TitlePart{Icon: iconKey, Text: text})
 		}
 	}

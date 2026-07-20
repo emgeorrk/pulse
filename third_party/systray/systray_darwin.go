@@ -115,11 +115,21 @@ func SetTitle(title string) {
 // under key for use in SetTitleParts. Register each icon once, before the
 // first SetTitleParts call that references it.
 func RegisterTitleIcon(key string, png []byte) {
+	registerTitleIcon(key, png, false)
+}
+
+// RegisterColorTitleIcon registers a full-color image (country flags) drawn
+// as-is in the title, without the labelColor tint template icons get.
+func RegisterColorTitleIcon(key string, png []byte) {
+	registerTitleIcon(key, png, true)
+}
+
+func registerTitleIcon(key string, png []byte, color bool) {
 	if len(png) == 0 {
 		return
 	}
 	cstr := (*C.char)(unsafe.Pointer(&png[0]))
-	C.registerTitleIcon(C.CString(key), cstr, (C.int)(len(png)))
+	C.registerTitleIcon(C.CString(key), cstr, (C.int)(len(png)), C.bool(color))
 }
 
 // SetTitleParts sets the status item title as attributed text where each

@@ -83,6 +83,8 @@ static const CGFloat kPulseCheckX = 10;
 static const CGFloat kPulseCheckSize = 14;
 static const CGFloat kPulseTextX = 27;
 static const CGFloat kPulseTrailingPad = 14;
+static const CGFloat kPulseIconSize = 16;
+static const CGFloat kPulseIconGap = 6;
 
 @interface PulseKeepOpenItemView : NSView
 - (instancetype)initWithMenuItem:(NSMenuItem *)theItem;
@@ -95,6 +97,9 @@ static const CGFloat kPulseTrailingPad = 14;
   NSVisualEffectView *highlight;
   NSImageView *check;
   NSTextField *label;
+  // The item's image, drawn trailing (after the text) — mirrors where the
+  // emoji flag sits in the text styles. Never tinted: flags stay full color.
+  NSImageView *icon;
 }
 
 - (instancetype)initWithMenuItem:(NSMenuItem *)theItem {
@@ -140,6 +145,11 @@ static const CGFloat kPulseTrailingPad = 14;
   label.maximumNumberOfLines = 1;
   [self addSubview:label];
 
+  icon = [[NSImageView alloc] initWithFrame:NSZeroRect];
+  icon.imageScaling = NSImageScaleProportionallyUpOrDown;
+  icon.hidden = YES;
+  [self addSubview:icon];
+
   return self;
 }
 
@@ -158,8 +168,18 @@ static const CGFloat kPulseTrailingPad = 14;
   check.hidden = (it.state != NSControlStateValueOn);
   self.alphaValue = it.enabled ? 1.0 : 0.4;
 
+  icon.image = it.image;
+  icon.hidden = (it.image == nil);
+  CGFloat trailing = kPulseTextX + NSWidth(lf);
+  if (it.image != nil) {
+    icon.frame = NSMakeRect(trailing + kPulseIconGap,
+                            floor((kPulseItemHeight - kPulseIconSize) / 2),
+                            kPulseIconSize, kPulseIconSize);
+    trailing = NSMaxX(icon.frame);
+  }
+
   // Grow-only so a shrinking live value doesn't make the open menu jitter.
-  CGFloat needed = kPulseTextX + NSWidth(lf) + kPulseTrailingPad;
+  CGFloat needed = trailing + kPulseTrailingPad;
   if (needed > NSWidth(self.frame)) {
     NSRect f = self.frame;
     f.size.width = needed;
@@ -229,6 +249,9 @@ static const CGFloat kPulseTrailingPad = 14;
   NSCondition* cond;
   // PATCH(pulse): template images for inline title icons, key → NSImage.
   NSMutableDictionary<NSString*, NSImage*> *titleIcons;
+  // PATCH(pulse): keys of full-color title icons (country flags) — drawn
+  // as-is in setTitleParts, never through the labelColor tint.
+  NSMutableSet<NSString*> *colorTitleIconKeys;
 }
 
 @synthesize window = _window;
@@ -339,11 +362,18 @@ static NSDictionary *pulseTitleTextAttrs(NSFont *font) {
 // stays the source of truth; icons are drawn as text attachments sized to
 // the font and vertically centered on the cap-height band, so they sit on
 // the same baseline as the values next to them.
-- (void)registerTitleIcon:(NSArray*)keyAndImage {
+- (void)registerTitleIcon:(NSArray*)keyImageAndColor {
   if (titleIcons == nil) {
     titleIcons = [NSMutableDictionary dictionary];
+    colorTitleIconKeys = [NSMutableSet set];
   }
-  titleIcons[[keyAndImage objectAtIndex:0]] = [keyAndImage objectAtIndex:1];
+  NSString *key = [keyImageAndColor objectAtIndex:0];
+  titleIcons[key] = [keyImageAndColor objectAtIndex:1];
+  if ([[keyImageAndColor objectAtIndex:2] boolValue]) {
+    [colorTitleIconKeys addObject:key];
+  } else {
+    [colorTitleIconKeys removeObject:key];
+  }
 }
 
 // Well above cap height: the glyphs are full-square symbolic icons and read
@@ -391,7 +421,10 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
     NSImage *icon = fields.count > 0 && fields[0].length > 0 ? titleIcons[fields[0]] : nil;
     if (icon != nil) {
       NSTextAttachment *att = [[NSTextAttachment alloc] init];
-      att.image = tintedTitleIcon(icon, side);
+      // PATCH(pulse): color icons (flags) draw as-is; the alpha tint would
+      // flatten them to a labelColor square.
+      BOOL color = [colorTitleIconKeys containsObject:fields[0]];
+      att.image = color ? icon : tintedTitleIcon(icon, side);
       att.bounds = CGRectMake(0, -drop, side, side);
       [out appendAttributedString:[NSAttributedString attributedStringWithAttachment:att]];
     }
@@ -543,6 +576,10 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
     return;
   }
   menuItem.image = image;
+  // PATCH(pulse): keep-open rows draw the image themselves.
+  if ([menuItem.view isKindOfClass:[PulseKeepOpenItemView class]]) {
+    [(PulseKeepOpenItemView *)menuItem.view sync];
+  }
 }
 
 // PATCH(pulse): live style switching needs a way back to no icon;
@@ -551,6 +588,9 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
   NSMenuItem* menuItem = find_menu_item(menu, menuId);
   if (menuItem != NULL) {
     menuItem.image = nil;
+    if ([menuItem.view isKindOfClass:[PulseKeepOpenItemView class]]) {
+      [(PulseKeepOpenItemView *)menuItem.view sync];
+    }
   }
 }
 
@@ -712,9 +752,10 @@ void setTitle(char* ctitle) {
   runInMainThread(@selector(setTitle:), (id)title);
 }
 
-// PATCH(pulse): inline title icons. Only the alpha channel is used — the
-// glyph is tinted at draw time (see tintedTitleIcon), not template-rendered.
-void registerTitleIcon(char* key, const char* iconBytes, int length) {
+// PATCH(pulse): inline title icons. With color=false only the alpha channel
+// is used — the glyph is tinted at draw time (see tintedTitleIcon), not
+// template-rendered; color=true keeps the image as-is (country flags).
+void registerTitleIcon(char* key, const char* iconBytes, int length, bool color) {
   NSString* nsKey = [[NSString alloc] initWithCString:key
                                              encoding:NSUTF8StringEncoding];
   free(key);
@@ -724,7 +765,7 @@ void registerTitleIcon(char* key, const char* iconBytes, int length) {
     if (image == nil) {
       return;
     }
-    runInMainThread(@selector(registerTitleIcon:), @[nsKey, image]);
+    runInMainThread(@selector(registerTitleIcon:), @[nsKey, image, @(color)]);
   }
 }
 

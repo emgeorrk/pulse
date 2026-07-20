@@ -24,4 +24,12 @@ NSGraphicsContext.current?.imageInterpolation = .high
 img.draw(in: NSRect(x: (CGFloat(size) - w) / 2, y: (CGFloat(size) - h) / 2, width: w, height: h),
          from: .zero, operation: .sourceOver, fraction: 1.0)
 NSGraphicsContext.restoreGraphicsState()
-try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+// An error thrown from top-level code under `swift <file>` (immediate mode)
+// traps the whole swift-frontend process — the shell sees "Trace/BPT trap",
+// not a diagnostic — so failures must be caught and reported here.
+do {
+    try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+} catch {
+    FileHandle.standardError.write("cannot write \(args[2]): \(error.localizedDescription)\n".data(using: .utf8)!)
+    exit(1)
+}
