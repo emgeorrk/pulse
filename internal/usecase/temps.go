@@ -22,7 +22,6 @@ func AggregateTemps(all []entity.Reading) entity.TempStats {
 	)
 
 	for i, r := range all {
-		name := strings.ToLower(r.Name)
 		sum += r.Value
 
 		if r.Value > stats.Hottest.Value {
@@ -34,14 +33,14 @@ func AggregateTemps(all []entity.Reading) entity.TempStats {
 			stats.Coolest = r
 		}
 
-		if matchAny(name, gpuTemperatureMarkers()) {
+		if IsGPUTempSensor(r.Name) {
 			gpuSum += r.Value
 			gpuN++
 
 			continue // "GPU" must not land in the CPU aggregate via the "soc" marker
 		}
 
-		if matchAny(name, cpuTemperatureMarkers()) {
+		if IsCPUTempSensor(r.Name) {
 			cpuSum += r.Value
 			cpuN++
 		}
@@ -60,6 +59,17 @@ func AggregateTemps(all []entity.Reading) entity.TempStats {
 	}
 
 	return stats
+}
+
+// IsGPUTempSensor reports whether this sensor feeds the GPU aggregate.
+func IsGPUTempSensor(name string) bool {
+	return matchAny(strings.ToLower(name), gpuTemperatureMarkers())
+}
+
+// IsCPUTempSensor reports whether this sensor feeds the CPU aggregate. A GPU
+// sensor never does, even when it matches a CPU marker (e.g. "soc").
+func IsCPUTempSensor(name string) bool {
+	return !IsGPUTempSensor(name) && matchAny(strings.ToLower(name), cpuTemperatureMarkers())
 }
 
 func cpuTemperatureMarkers() []string {

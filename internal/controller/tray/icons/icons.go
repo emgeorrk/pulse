@@ -24,7 +24,6 @@ const (
 	Memory          = "memory"
 	Temperature     = "temperature"
 	Fan             = "fan"
-	Voltage         = "voltage"
 	Power           = "power" // SF Symbol, rendered into each style pack
 	Network         = "network"
 	NetworkDownload = "network-download"
@@ -50,7 +49,7 @@ func ImageStyles() []string {
 // appear in the menu bar, so they are excluded).
 func MetricKeys() []string {
 	return []string{
-		CPU, Memory, Temperature, Fan, Voltage, Power,
+		CPU, Memory, Temperature, Fan, Power,
 		Network, NetworkDownload, NetworkUpload,
 		Storage, Battery, GPU, System,
 	}

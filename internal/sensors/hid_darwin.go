@@ -21,12 +21,10 @@ IOHIDEventRef IOHIDServiceClientCopyEvent(IOHIDServiceClientRef, int64_t, int32_
 double IOHIDEventGetFloatValue(IOHIDEventRef, int32_t);
 
 #define kIOHIDEventTypeTemperature 15
-#define kIOHIDEventTypePower       25
 #define IOHIDEventFieldBase(type)  ((type) << 16)
 
 // Apple sensor pages/usages (AppleHIDUsageTables):
 //   0xff00/5 — temperature sensors
-//   0xff08/3 — voltage, 0xff08/2 — current
 static IOHIDEventSystemClientRef pulse_hid_client(int page, int usage) {
 	IOHIDEventSystemClientRef client = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	if (!client)
@@ -73,25 +71,20 @@ import (
 
 const (
 	temperatureUsagePage = 0xff00
-	voltageUsagePage     = 0xff08
 	temperatureUsage     = 5
-	voltageUsage         = 3
 )
 
-// HID reads temperatures and voltages from the HID sensor hub — the Apple
-// Silicon path. Clients are created once: the service list is stable for
-// the session.
+// HID reads temperatures from the HID sensor hub — the Apple Silicon path.
+// The client is created once: the service list is stable for the session.
 type HID struct {
 	temp C.IOHIDEventSystemClientRef
-	volt C.IOHIDEventSystemClientRef
 }
 
 func NewHID() (*HID, error) {
 	h := &HID{
 		temp: C.pulse_hid_client(temperatureUsagePage, temperatureUsage),
-		volt: C.pulse_hid_client(voltageUsagePage, voltageUsage),
 	}
-	if h.temp == nil && h.volt == nil {
+	if h.temp == nil {
 		return nil, errHIDUnavailable
 	}
 
@@ -104,14 +97,6 @@ func NewHID() (*HID, error) {
 func (h *HID) Temps() ([]entity.Reading, error) {
 	return h.read(h.temp, C.kIOHIDEventTypeTemperature, func(name string, v float64) bool {
 		return v > 0 && v <= 125 && !strings.Contains(strings.ToLower(name), "tcal")
-	})
-}
-
-// Voltages returns voltage sensors (0.01 ≤ v ≤ 100 V; sleeping LDOs at zero
-// are excluded).
-func (h *HID) Voltages() ([]entity.Reading, error) {
-	return h.read(h.volt, C.kIOHIDEventTypePower, func(_ string, v float64) bool {
-		return v >= 0.01 && v <= 100
 	})
 }
 

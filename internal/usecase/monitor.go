@@ -180,12 +180,6 @@ func (m *Monitor) sample(ctx context.Context) entity.Snapshot { //nolint:cyclop,
 		}
 	}
 
-	if m.src.Volt != nil {
-		if volts, err := m.src.Volt.Voltages(); err == nil {
-			snap.Volts = volts
-		}
-	}
-
 	if m.src.Fan != nil {
 		if fans, err := m.src.Fan.Fans(); err == nil {
 			snap.Fans = fans

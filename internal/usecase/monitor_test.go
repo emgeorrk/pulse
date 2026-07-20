@@ -193,7 +193,7 @@ func TestSample(t *testing.T) {
 				}
 
 				for name, ptr := range map[string]any{
-					"Volts": snap.Volts, "Fans": snap.Fans, "Battery": snap.Battery,
+					"Fans": snap.Fans, "Battery": snap.Battery,
 					"GPU": snap.GPU, "Power": snap.Power, "Freq": snap.Freq,
 				} {
 					if isNilPtrOrSlice(ptr) {
@@ -225,7 +225,7 @@ func TestSample(t *testing.T) {
 
 				if snap.Net != nil || snap.Disk != nil || snap.Temps != nil ||
 					snap.Battery != nil || snap.GPU != nil || snap.Power != nil ||
-					snap.Freq != nil || snap.Volts != nil || snap.Fans != nil {
+					snap.Freq != nil || snap.Fans != nil {
 					t.Errorf("optional fields should stay empty: %+v", snap)
 				}
 			},
@@ -248,9 +248,6 @@ func TestSample(t *testing.T) {
 				temp := mocks.NewMockTempSource(ctrl)
 				temp.EXPECT().Temps().Return(nil, errSensor)
 
-				volt := mocks.NewMockVoltSource(ctrl)
-				volt.EXPECT().Voltages().Return(nil, errSensor)
-
 				fan := mocks.NewMockFanSource(ctrl)
 				fan.EXPECT().Fans().Return(nil, errSensor)
 
@@ -269,7 +266,7 @@ func TestSample(t *testing.T) {
 				return &Monitor{
 					src: &sensors.Sources{
 						CPU: cpu, Mem: mem, Net: net, Disk: disk, Temp: temp,
-						Volt: volt, Fan: fan, Battery: batt, GPU: gpu, Power: power, Freq: freq,
+						Fan: fan, Battery: batt, GPU: gpu, Power: power, Freq: freq,
 					},
 					prevNet:  map[string]entity.NetCounters{"en0": {Name: "en0"}},
 					haveDisk: true,
@@ -343,9 +340,6 @@ func buildFullMonitor(ctrl *gomock.Controller) *Monitor {
 	temp := mocks.NewMockTempSource(ctrl)
 	temp.EXPECT().Temps().Return([]entity.Reading{{Name: "PMU tdie0", Value: 55}}, nil)
 
-	volt := mocks.NewMockVoltSource(ctrl)
-	volt.EXPECT().Voltages().Return([]entity.Reading{{Name: "vbus", Value: 13}}, nil)
-
 	fan := mocks.NewMockFanSource(ctrl)
 	fan.EXPECT().Fans().Return([]entity.Fan{{Name: "Fan 1", RPM: 1800, Max: 5000}}, nil)
 
@@ -364,7 +358,7 @@ func buildFullMonitor(ctrl *gomock.Controller) *Monitor {
 	return &Monitor{
 		src: &sensors.Sources{
 			CPU: cpu, Mem: mem, Net: net, Disk: disk, Temp: temp,
-			Volt: volt, Fan: fan, Battery: batt, GPU: gpu, Power: power, Freq: freq,
+			Fan: fan, Battery: batt, GPU: gpu, Power: power, Freq: freq,
 		},
 		prevTicks: []entity.CoreTicks{{User: 100, Idle: 700}},
 		prevNet:   map[string]entity.NetCounters{"en0": {Name: "en0", Rx: 1000, Tx: 500}},
@@ -379,8 +373,6 @@ func buildFullMonitor(ctrl *gomock.Controller) *Monitor {
 // empty slice — used to assert optional snapshot fields were populated.
 func isNilPtrOrSlice(v any) bool {
 	switch t := v.(type) {
-	case []entity.Reading:
-		return len(t) == 0
 	case []entity.Fan:
 		return len(t) == 0
 	case *entity.BatteryStats:
