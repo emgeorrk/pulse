@@ -36,6 +36,7 @@ type Tray struct { //nolint:govet // Field order follows UI lifecycle and state 
 	sys          *systray.MenuItem
 	actMon       *systray.MenuItem
 	settings     *systray.MenuItem
+	quit         *systray.MenuItem
 	ipRow        *systray.MenuItem
 	appliedStyle config.VisualStyle
 	ipFlagCC     string // country of the flag on ipRow ("" = none), lowercase
@@ -136,15 +137,15 @@ func (t *Tray) build() {
 
 	t.buildSettings(cfg)
 
-	t.applyVisualStyle(cfg) // after buildSettings so the Settings item exists
-
 	systray.AddSeparator()
 
-	quit := systray.AddMenuItem("Quit Pulse", "")
+	t.quit = systray.AddMenuItem("Quit Pulse", "")
 	go func() {
-		<-quit.ClickedCh
+		<-t.quit.ClickedCh
 		systray.Quit()
 	}()
+
+	t.applyVisualStyle(cfg) // last: needs the Settings and Quit items built
 }
 
 // headerTitle is the group header text plus the live aggregate; the group's
@@ -159,12 +160,13 @@ func (g *groupUI) headerTitle(aggregate string) string {
 	return title
 }
 
-// Emoji for the About, Activity Monitor and Settings items in the emoji
-// style; the groups carry their own emoji in the registry.
+// Emoji for the About, Activity Monitor, Settings and Quit items in the
+// emoji style; the groups carry their own emoji in the registry.
 const (
 	sysEmoji      = "ℹ️"
 	actMonEmoji   = "📈"
 	settingsEmoji = "🛠️"
+	quitEmoji     = "🚪"
 )
 
 // openActivityMonitor launches Activity Monitor via open(1). A failure is
@@ -191,6 +193,7 @@ func (t *Tray) applyVisualStyle(cfg config.Config) {
 	applyItemStyle(t.sys, style, icons.About, sysEmoji)
 	applyItemStyle(t.actMon, style, icons.ActivityMonitor, actMonEmoji)
 	applyItemStyle(t.settings, style, icons.Settings, settingsEmoji)
+	applyItemStyle(t.quit, style, icons.Quit, quitEmoji)
 
 	t.mu.Lock()
 	t.appliedStyle = style

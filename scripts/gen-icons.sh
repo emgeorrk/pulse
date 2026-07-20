@@ -60,11 +60,11 @@ if [ -d "$flags_dir" ]; then
   done
 fi
 
-# The Vitals sets also have no gear, info or activity glyphs; the Settings,
-# About and Activity Monitor items use SF Symbols instead. These are
-# menu items only (never in the menu bar title), so one PNG is shared across
-# every style and lives at the png root (not in a style dir).
-for spec in "gearshape.fill settings" "info.circle about" "waveform.path.ecg activity"; do
+# The Vitals sets also have no gear, info, activity or exit glyphs; the
+# Settings, About, Activity Monitor and Quit items use SF Symbols instead.
+# These are menu items only (never in the menu bar title), so one PNG is
+# shared across every style and lives at the png root (not in a style dir).
+for spec in "gearshape.fill settings" "info.circle about" "waveform.path.ecg activity" "rectangle.portrait.and.arrow.right quit"; do
   set -- $spec
   swift "$root/scripts/sfsymbol2png.swift" "$1" "$png_root/$2.png" "$size"
   echo "$png_root/$2.png"
