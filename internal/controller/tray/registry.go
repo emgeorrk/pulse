@@ -297,7 +297,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 
 	groups := []group{cpu, mem}
 	if caps.System {
-		groups = append(groups, systemGroup(hw.NumCores))
+		groups = append(groups, systemGroup())
 	}
 
 	if caps.Temps {
@@ -331,7 +331,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 	return groups
 }
 
-func systemGroup(numCores int) group { //nolint:funlen // One metric literal per system stat.
+func systemGroup() group { //nolint:funlen // One metric literal per system stat.
 	load := func(get func(*entity.SystemStats) float64) func(entity.Snapshot, config.Config) string {
 		return func(s entity.Snapshot, c config.Config) string {
 			if s.System == nil {
@@ -342,9 +342,7 @@ func systemGroup(numCores int) group { //nolint:funlen // One metric literal per
 		}
 	}
 	loadTip := func(window string) string {
-		return fmt.Sprintf(
-			"Average number of processes running or waiting for the CPU over the last %s. Unitless: %d (this Mac's core count) means all cores are busy",
-			window, numCores)
+		return "Average number of processes running or waiting for the CPU over the last " + window
 	}
 
 	return group{
