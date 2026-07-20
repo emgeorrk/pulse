@@ -44,6 +44,7 @@ be used in apps for Apple platforms per Apple's license terms:
 - `settings.png` — `gearshape.fill` (shared across styles)
 - `about.png` — `info.circle` (shared across styles)
 - `activity.png` — `waveform.path.ecg` (shared across styles)
+- `quit.png` — `rectangle.portrait.and.arrow.right` (shared across styles)
 - `<style>/power.png` — `powerplug.fill` (per style: Power is a pinnable
   metric, so its icon resolves per style like the Vitals ones)
 

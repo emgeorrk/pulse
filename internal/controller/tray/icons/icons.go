@@ -17,8 +17,8 @@ import (
 var pngs embed.FS
 
 // Icon keys. Each matches a png/<style>/<key>.png asset, except the shared
-// SF Symbols (Settings, About, ActivityMonitor), which live at the png root
-// because they only appear on menu items, never in the menu bar title.
+// SF Symbols (Settings, About, ActivityMonitor, Quit), which live at the png
+// root because they only appear on menu items, never in the menu bar title.
 const (
 	CPU             = "cpu"
 	Memory          = "memory"
@@ -35,6 +35,7 @@ const (
 	Settings        = "settings" // SF Symbol, shared across styles
 	About           = "about"    // SF Symbol, shared across styles
 	ActivityMonitor = "activity" // SF Symbol, shared across styles
+	Quit            = "quit"     // SF Symbol, shared across styles
 )
 
 // ImageStyles lists the styles backed by a PNG pack. The strings equal the
@@ -97,7 +98,7 @@ func PNG(style, key string) []byte {
 	path := "png/" + style + "/" + key + ".png"
 
 	switch key {
-	case Settings, About, ActivityMonitor:
+	case Settings, About, ActivityMonitor, Quit:
 		path = "png/" + key + ".png"
 	}
 
