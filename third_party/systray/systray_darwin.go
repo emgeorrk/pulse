@@ -138,6 +138,16 @@ func SetTitleParts(parts []TitlePart) {
 	C.setTitleParts(C.CString(encodeTitleParts(parts)))
 }
 
+// SetTitleFixedWidth pins the status item to the widest title measured since
+// the last call, so live values changing digit count don't shift neighboring
+// menu bar items; digits render monospaced while it is on. Every call resets
+// the tracked width — the next SetTitle/SetTitleParts re-fits it — so call it
+// again after a config change to let the item shrink to the new content.
+// Passing false restores automatic sizing. PATCH(pulse): macOS only.
+func SetTitleFixedWidth(on bool) {
+	C.setTitleFixedWidth(C.bool(on))
+}
+
 // SetEmojiIcon renders emoji into the menu item's icon slot (macOS only).
 // PATCH(pulse): with an image present in every visual style, a style switch
 // only swaps image contents — an open menu never gains or loses its icon

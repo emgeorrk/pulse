@@ -346,6 +346,15 @@ static const CGFloat kPulseIconGap = 6;
   [self updateTitleButtonStyle];
 }
 
+// PATCH(pulse): fixed-width title. With the flag on, the status item length
+// is pinned to the widest content measured since the flag was last set
+// (grow-only), so a value gaining a digit doesn't shift neighboring items.
+// Each setTitleFixedWidth: call resets the tracked width without measuring;
+// the next title assignment re-fits (the Go side always follows the call
+// with one), so a config change lets the item shrink to the new content.
+static BOOL pulseTitleFixedWidth = NO;
+static CGFloat pulseTitleWidthMax = 0;
+
 // PATCH(pulse): title text attributes with an explicit foreground color.
 // Runs without one get the button's default color, and NSStatusBarButton
 // swaps that for a dimmed variant while its display's menu bar is inactive
@@ -355,6 +364,13 @@ static const CGFloat kPulseIconGap = 6;
 static NSDictionary *pulseTitleTextAttrs(NSFont *font) {
   if (font == nil) {
     font = [NSFont menuBarFontOfSize:0];
+  }
+  // PATCH(pulse): monospaced digits under fixed width, so same-length values
+  // don't wobble inside the pinned frame. Same point size and metrics as the
+  // system font — the attachment math in setTitleParts is unaffected.
+  if (pulseTitleFixedWidth) {
+    font = [NSFont monospacedDigitSystemFontOfSize:font.pointSize
+                                            weight:NSFontWeightRegular];
   }
   return @{NSFontAttributeName : font,
            NSForegroundColorAttributeName : NSColor.labelColor};
@@ -448,6 +464,38 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
   [self updateTitleButtonStyle];
 }
 
+// PATCH(pulse): see pulseTitleFixedWidth.
+- (void)setTitleFixedWidth:(NSNumber *)on {
+  BOOL enable = [on boolValue];
+  if (!enable && !pulseTitleFixedWidth) {
+    return; // off → off: don't touch statusItem.length on every refresh
+  }
+  pulseTitleFixedWidth = enable;
+  pulseTitleWidthMax = 0; // re-fit on the next title assignment
+  if (!enable) {
+    statusItem.length = NSVariableStatusItemLength;
+  }
+}
+
+// pulseApplyTitleWidth pins the item to the widest content seen so far.
+// intrinsicContentSize comes straight from the button cell, so it already
+// reflects the attributedTitle assigned a moment ago (plus image + padding).
+- (void)pulseApplyTitleWidth {
+  if (!pulseTitleFixedWidth) {
+    return;
+  }
+  CGFloat needed = ceil(statusItem.button.intrinsicContentSize.width);
+  if (needed <= 0) { // NSViewNoIntrinsicMetric — leave the length alone
+    return;
+  }
+  if (needed > pulseTitleWidthMax) {
+    pulseTitleWidthMax = needed;
+  }
+  if (statusItem.length != pulseTitleWidthMax) {
+    statusItem.length = pulseTitleWidthMax;
+  }
+}
+
 - (void)updateTitleButtonStyle {
   if (statusItem.button.image != nil) {
     if ([statusItem.button.title length] == 0) {
@@ -458,6 +506,9 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
   } else {
     statusItem.button.imagePosition = NSNoImage;
   }
+  // PATCH(pulse): every content change funnels through here (setTitle:,
+  // setTitleParts:, setIcon:) — re-fit the fixed width after the assignment.
+  [self pulseApplyTitleWidth];
 }
 
 
@@ -785,6 +836,11 @@ void setTitleParts(char* cencoded) {
                                                encoding:NSUTF8StringEncoding];
   free(cencoded);
   runInMainThread(@selector(setTitleParts:), (id)encoded);
+}
+
+// PATCH(pulse): fixed-width status item title, see pulseTitleFixedWidth.
+void setTitleFixedWidth(bool on) {
+  runInMainThread(@selector(setTitleFixedWidth:), @(on));
 }
 
 void clearMenuItemIcon(int menuId) {
