@@ -168,6 +168,13 @@ static const CGFloat kPulseIconGap = 6;
   check.hidden = (it.state != NSControlStateValueOn);
   self.alphaValue = it.enabled ? 1.0 : 0.4;
 
+  // PATCH(pulse): view-backed items ignore NSMenuItem.toolTip — mirror it
+  // onto the view; guard so per-tick syncs don't reset a visible tooltip.
+  NSString *tip = it.toolTip.length ? it.toolTip : nil;
+  if (tip != self.toolTip && ![tip isEqualToString:self.toolTip]) {
+    self.toolTip = tip;
+  }
+
   icon.image = it.image;
   icon.hidden = (it.image == nil);
   CGFloat trailing = kPulseTextX + NSWidth(lf);

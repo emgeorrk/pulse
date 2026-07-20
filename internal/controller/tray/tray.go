@@ -95,7 +95,7 @@ func (t *Tray) build() {
 		g.item = systray.AddMenuItem(g.headerTitle(""), "")
 		for metricIndex := range g.metrics {
 			m := &g.metrics[metricIndex]
-			it := g.item.AddSubMenuItemCheckbox(m.label+": —", "", cfg.IsPinned(m.id))
+			it := g.item.AddSubMenuItemCheckbox(m.label+": —", m.tip, cfg.IsPinned(m.id))
 
 			it.KeepMenuOpen() // pinning several metrics in one menu open
 			go t.watchPin(m.id, it)
