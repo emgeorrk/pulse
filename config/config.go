@@ -64,6 +64,9 @@ type Config struct {
 	StartAtLogin    bool              `json:"start_at_login"`
 	HigherPrecision bool              `json:"higher_precision"`
 	ShowPublicIP    bool              `json:"show_public_ip"`
+	// HideTips is inverted so the zero value keeps tooltips visible for
+	// configs saved before the field existed.
+	HideTips bool `json:"hide_tooltips"`
 }
 
 func defaults() Config {

@@ -327,18 +327,3 @@ func TestChargeMark(t *testing.T) {
 		})
 	}
 }
-
-// Every metric must carry a tooltip explaining what it measures — the rows
-// render it on hover, and a metric added without one would silently show
-// nothing.
-func TestEveryMetricHasTip(t *testing.T) {
-	t.Parallel()
-
-	for _, g := range buildGroups(entity.HWInfo{NumCores: 2}, fullCaps()) {
-		for _, m := range g.metrics {
-			if m.tip == "" {
-				t.Errorf("%s: empty tip", m.id)
-			}
-		}
-	}
-}

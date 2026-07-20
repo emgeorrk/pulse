@@ -95,7 +95,7 @@ func (t *Tray) build() {
 		g.item = systray.AddMenuItem(g.headerTitle(""), "")
 		for metricIndex := range g.metrics {
 			m := &g.metrics[metricIndex]
-			it := g.item.AddSubMenuItemCheckbox(m.label+": —", m.tip, cfg.IsPinned(m.id))
+			it := g.item.AddSubMenuItemCheckbox(m.label+": —", rowTip(m, cfg), cfg.IsPinned(m.id))
 
 			it.KeepMenuOpen() // pinning several metrics in one menu open
 			go t.watchPin(m.id, it)
@@ -237,6 +237,11 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	t.addToggle(s, "Higher precision", cfg.HigherPrecision, func(c *config.Config) *bool { return &c.HigherPrecision })
 	t.addToggle(s, "CPU sparkline in bar", cfg.ShowSparkline, func(c *config.Config) *bool { return &c.ShowSparkline })
 
+	tips := s.AddSubMenuItemCheckbox("Hide metric tooltips", "", cfg.HideTips)
+
+	tips.KeepMenuOpen()
+	go t.watchTips(tips)
+
 	s.AddSeparator()
 
 	login := s.AddSubMenuItemCheckbox("Start at login", "", cfg.StartAtLogin)
@@ -370,6 +375,42 @@ func (t *Tray) addToggle(parent *systray.MenuItem, title string, checked bool, f
 			t.refresh()
 		}
 	}()
+}
+
+// rowTip is the tooltip a metric row is created with — empty when the
+// HideTips setting is on.
+func rowTip(m *metric, cfg config.Config) string {
+	if cfg.HideTips {
+		return ""
+	}
+
+	return m.tip
+}
+
+// watchTips flips HideTips and applies it to every metric row in place.
+func (t *Tray) watchTips(item *systray.MenuItem) {
+	for range item.ClickedCh {
+		var hide bool
+
+		t.updateConfig(func(c *config.Config) { c.HideTips = !c.HideTips; hide = c.HideTips })
+		setChecked(item, hide)
+		t.applyTips(hide)
+	}
+}
+
+// applyTips clears or restores the metric tooltips per the HideTips setting.
+func (t *Tray) applyTips(hide bool) {
+	for gi := range t.groups {
+		g := &t.groups[gi]
+		for i, it := range g.rows {
+			tip := ""
+			if !hide {
+				tip = g.metrics[i].tip
+			}
+
+			it.SetTooltip(tip)
+		}
+	}
 }
 
 // watchLogin flips StartAtLogin and writes/removes the LaunchAgent. A write
