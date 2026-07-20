@@ -151,17 +151,17 @@ func TestLoadNewToggles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 
 	s := Load(path)
-	if c := s.Get(); c.HigherPrecision || c.ShowPublicIP {
-		t.Errorf("defaults: HigherPrecision=%t ShowPublicIP=%t, want false/false", c.HigherPrecision, c.ShowPublicIP)
+	if c := s.Get(); c.HigherPrecision || c.ShowPublicIP || c.FixedWidth {
+		t.Errorf("defaults: HigherPrecision=%t ShowPublicIP=%t FixedWidth=%t, want all false", c.HigherPrecision, c.ShowPublicIP, c.FixedWidth)
 	}
 
-	if err := s.Update(func(c *Config) { c.HigherPrecision = true; c.ShowPublicIP = true }); err != nil {
+	if err := s.Update(func(c *Config) { c.HigherPrecision = true; c.ShowPublicIP = true; c.FixedWidth = true }); err != nil {
 		t.Fatal(err)
 	}
 
 	c := Load(path).Get()
-	if !c.HigherPrecision || !c.ShowPublicIP {
-		t.Errorf("after reload: HigherPrecision=%t ShowPublicIP=%t, want true/true", c.HigherPrecision, c.ShowPublicIP)
+	if !c.HigherPrecision || !c.ShowPublicIP || !c.FixedWidth {
+		t.Errorf("after reload: HigherPrecision=%t ShowPublicIP=%t FixedWidth=%t, want all true", c.HigherPrecision, c.ShowPublicIP, c.FixedWidth)
 	}
 }
 

@@ -18,6 +18,7 @@ void clearMenuItemIcon(int menuId);
 void setTitle(char* title);
 void registerTitleIcon(char* key, const char* iconBytes, int length, bool color);
 void setTitleParts(char* encoded);
+void setTitleFixedWidth(bool on);
 void setTooltip(char* tooltip);
 void setRemovalAllowed(bool allowed);
 void add_or_update_menu_item(int menuId, int parentMenuId, char* title, char* tooltip, short disabled, short checked, short isCheckable);
