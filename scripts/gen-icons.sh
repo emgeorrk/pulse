@@ -37,6 +37,7 @@ done
 # every style pack.
 for svg_dir in "$svg_root"/*/; do
   style="$(basename "$svg_dir")"
+  if [ "$style" = "flags" ]; then continue; fi # not a style pack, no metric glyphs
   swift "$root/scripts/sfsymbol2png.swift" powerplug.fill "$png_root/$style/power.png" "$size"
   echo "$png_root/$style/power.png"
 done
