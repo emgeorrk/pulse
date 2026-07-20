@@ -100,6 +100,7 @@ static const CGFloat kPulseIconGap = 6;
   // The item's image, drawn trailing (after the text) — mirrors where the
   // emoji flag sits in the text styles. Never tinted: flags stay full color.
   NSImageView *icon;
+  NSTrackingArea *hoverArea;
 }
 
 - (instancetype)initWithMenuItem:(NSMenuItem *)theItem {
@@ -201,16 +202,19 @@ static const CGFloat kPulseIconGap = 6;
 }
 
 - (void)updateTrackingAreas {
-  [super updateTrackingAreas];
-  for (NSTrackingArea *area in self.trackingAreas) {
-    [self removeTrackingArea:area];
+  // Replace only our own hover area: AppKit owns further tracking areas on
+  // this view (the tooltip one, when toolTip is set) — removing them here
+  // would silently disable the tooltip.
+  if (hoverArea != nil) {
+    [self removeTrackingArea:hoverArea];
   }
-  NSTrackingArea *area = [[NSTrackingArea alloc]
+  hoverArea = [[NSTrackingArea alloc]
       initWithRect:NSZeroRect
            options:(NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect)
              owner:self
           userInfo:nil];
-  [self addTrackingArea:area];
+  [self addTrackingArea:hoverArea];
+  [super updateTrackingAreas];
 }
 
 - (void)mouseEntered:(NSEvent *)event {
