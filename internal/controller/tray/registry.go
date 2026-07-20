@@ -20,6 +20,7 @@ const (
 	labelFree                = "Free"
 	labelTotal               = "Total"
 	labelVoltage             = "Voltage"
+	labelTemperature         = "Temperature"
 	tagCPU                   = "CPU "
 	tagSwap                  = "SW "
 	tagRead                  = "R "
@@ -623,7 +624,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 			},
 			{
 				id:    "batt.temp",
-				label: "Temperature",
+				label: labelTemperature,
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Battery == nil {
 						return "—"
@@ -682,7 +683,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 	g := group{
 		emoji: "🌡️",
 		icon:  icons.Temperature,
-		label: "Temp",
+		label: labelTemperature,
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			if s.Temps == nil {
 				return "—"
