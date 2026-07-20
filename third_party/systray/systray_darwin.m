@@ -100,6 +100,7 @@ static const CGFloat kPulseIconGap = 6;
   // The item's image, drawn trailing (after the text) — mirrors where the
   // emoji flag sits in the text styles. Never tinted: flags stay full color.
   NSImageView *icon;
+  NSTrackingArea *hoverArea;
 }
 
 - (instancetype)initWithMenuItem:(NSMenuItem *)theItem {
@@ -168,6 +169,13 @@ static const CGFloat kPulseIconGap = 6;
   check.hidden = (it.state != NSControlStateValueOn);
   self.alphaValue = it.enabled ? 1.0 : 0.4;
 
+  // PATCH(pulse): view-backed items ignore NSMenuItem.toolTip — mirror it
+  // onto the view; guard so per-tick syncs don't reset a visible tooltip.
+  NSString *tip = it.toolTip.length ? it.toolTip : nil;
+  if (tip != self.toolTip && ![tip isEqualToString:self.toolTip]) {
+    self.toolTip = tip;
+  }
+
   icon.image = it.image;
   icon.hidden = (it.image == nil);
   CGFloat trailing = kPulseTextX + NSWidth(lf);
@@ -194,16 +202,19 @@ static const CGFloat kPulseIconGap = 6;
 }
 
 - (void)updateTrackingAreas {
-  [super updateTrackingAreas];
-  for (NSTrackingArea *area in self.trackingAreas) {
-    [self removeTrackingArea:area];
+  // Replace only our own hover area: AppKit owns further tracking areas on
+  // this view (the tooltip one, when toolTip is set) — removing them here
+  // would silently disable the tooltip.
+  if (hoverArea != nil) {
+    [self removeTrackingArea:hoverArea];
   }
-  NSTrackingArea *area = [[NSTrackingArea alloc]
+  hoverArea = [[NSTrackingArea alloc]
       initWithRect:NSZeroRect
            options:(NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect)
              owner:self
           userInfo:nil];
-  [self addTrackingArea:area];
+  [self addTrackingArea:hoverArea];
+  [super updateTrackingAreas];
 }
 
 - (void)mouseEntered:(NSEvent *)event {

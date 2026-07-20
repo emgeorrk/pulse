@@ -49,13 +49,15 @@ const (
 // in fill(); a metric-level icon (network arrows) already carries the
 // qualifier, so its iconQual stays empty. barIcon, when set, may override
 // the title-icon key per snapshot (the public IP's country flag); an empty
-// return falls back to the static icon.
+// return falls back to the static icon. tip is the hover tooltip; only
+// metrics whose meaning isn't clear from the label carry one.
 type metric struct {
 	menu     func(s entity.Snapshot, c config.Config) string
 	bar      func(s entity.Snapshot, c config.Config) string
 	barIcon  func(s entity.Snapshot, c config.Config) string
 	id       entity.MetricID
 	label    string
+	tip      string
 	tag      string
 	sym      string
 	icon     string
@@ -165,6 +167,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 			cpu.metrics = append(cpu.metrics, metric{
 				id:    entity.MetricID("cpu.freq." + cl),
 				label: cl,
+				tip:   clusterTip(cl),
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Freq != nil {
 						for _, r := range s.Freq.Clusters {
@@ -244,6 +247,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 			{
 				id:    "mem.free",
 				label: labelFree,
+				tip:   "Completely unused RAM — macOS keeps it low on purpose; reclaimable memory is counted under Cached",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.Free, c.DecimalBytes, c.HigherPrecision)
 				},
@@ -254,6 +258,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 			{
 				id:    "mem.cached",
 				label: "Cached",
+				tip:   "File-backed and purgeable memory macOS can reclaim instantly — Cached Files in Activity Monitor",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					return format.Bytes(s.Mem.Cached, c.DecimalBytes, c.HigherPrecision)
 				},
@@ -276,6 +281,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 			{
 				id:    "swap.total",
 				label: "Swap total",
+				tip:   "Swap space macOS has allocated on disk so far; it grows and shrinks on demand",
 				tag:   tagSwap,
 				sym:   tagSwap,
 				menu: func(s entity.Snapshot, c config.Config) string {
@@ -290,7 +296,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 
 	groups := []group{cpu, mem}
 	if caps.System {
-		groups = append(groups, systemGroup())
+		groups = append(groups, systemGroup(hw.NumCores))
 	}
 
 	if caps.Temps {
@@ -328,7 +334,7 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 	return groups
 }
 
-func systemGroup() group {
+func systemGroup(numCores int) group { //nolint:funlen // One metric literal per system stat.
 	load := func(get func(*entity.SystemStats) float64) func(entity.Snapshot, config.Config) string {
 		return func(s entity.Snapshot, c config.Config) string {
 			if s.System == nil {
@@ -337,6 +343,11 @@ func systemGroup() group {
 
 			return format.Load(get(s.System))
 		}
+	}
+	loadTip := func(window string) string {
+		return fmt.Sprintf(
+			"Average number of processes running or waiting for the CPU over the last %s. Unitless: %d (this Mac's core count) means all cores are busy",
+			window, numCores)
 	}
 
 	return group{
@@ -354,11 +365,22 @@ func systemGroup() group {
 			{
 				id:    "sys.load1",
 				label: "Load 1m",
+				tip:   loadTip("minute"),
 				tag:   "LOAD ",
 				menu:  load(func(st *entity.SystemStats) float64 { return st.Load1 }),
 			},
-			{id: "sys.load5", label: "Load 5m", menu: load(func(st *entity.SystemStats) float64 { return st.Load5 })},
-			{id: "sys.load15", label: "Load 15m", menu: load(func(st *entity.SystemStats) float64 { return st.Load15 })},
+			{
+				id:    "sys.load5",
+				label: "Load 5m",
+				tip:   loadTip("5 minutes"),
+				menu:  load(func(st *entity.SystemStats) float64 { return st.Load5 }),
+			},
+			{
+				id:    "sys.load15",
+				label: "Load 15m",
+				tip:   loadTip("15 minutes"),
+				menu:  load(func(st *entity.SystemStats) float64 { return st.Load15 }),
+			},
 			{
 				id:    "sys.uptime",
 				label: "Uptime",
@@ -460,9 +482,22 @@ func powerGroup() group {
 					return format.Watts(s.Power.Total)
 				},
 			},
-			{id: "power.cpu", label: labelCPU, menu: watts(func(p *entity.PowerStats) float64 { return p.CPU })},
-			{id: "power.gpu", label: labelGPU, menu: watts(func(p *entity.PowerStats) float64 { return p.GPU })},
-			{id: "power.ane", label: "ANE", menu: watts(func(p *entity.PowerStats) float64 { return p.ANE })},
+			{
+				id:    "power.cpu",
+				label: labelCPU,
+				menu:  watts(func(p *entity.PowerStats) float64 { return p.CPU }),
+			},
+			{
+				id:    "power.gpu",
+				label: labelGPU,
+				menu:  watts(func(p *entity.PowerStats) float64 { return p.GPU }),
+			},
+			{
+				id:    "power.ane",
+				label: "ANE",
+				tip:   "Apple Neural Engine power draw",
+				menu:  watts(func(p *entity.PowerStats) float64 { return p.ANE }),
+			},
 		},
 	}
 }
@@ -501,6 +536,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 			{
 				id:    "batt.pct",
 				label: "Charge",
+				tip:   "Battery charge as macOS reports it (smoothed)",
 				tag:   "BAT ",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Battery == nil {
@@ -513,6 +549,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 			{
 				id:    "batt.raw",
 				label: "Raw charge",
+				tip:   "Raw charge: current ÷ full capacity in mAh; usually trails the system value by 1–3%",
 				tag:   "RAW ",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Battery == nil || s.Battery.RawPercent == 0 {
@@ -541,6 +578,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 			{
 				id:    "batt.time",
 				label: "Time left",
+				tip:   "Estimated time until empty, or until full when charging",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Battery == nil || s.Battery.MinutesLeft < 0 {
 						return "—"
@@ -563,6 +601,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 			{
 				id:    "batt.health",
 				label: "Health",
+				tip:   "Current full-charge capacity vs the design capacity",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Battery == nil || s.Battery.Health == 0 {
 						return "—"
@@ -608,6 +647,37 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 	}
 }
 
+// clusterTip explains an IOReport CPU cluster channel name: M*/E* clusters
+// hold efficiency cores, P* clusters performance cores (MCPU0/MCPU1/PCPU on
+// M5 Pro, ECPU/PCPU on M1).
+func clusterTip(name string) string {
+	kind := "performance"
+	if strings.HasPrefix(name, "E") || strings.HasPrefix(name, "M") {
+		kind = "efficiency"
+	}
+
+	return "Average frequency of the " + name + " cluster (" + kind + " cores)"
+}
+
+// tempSensorTip explains the common Apple Silicon sensor names; a sensor
+// this map doesn't know gets no tooltip.
+func tempSensorTip(name string) string {
+	lower := strings.ToLower(name)
+
+	switch {
+	case strings.Contains(lower, "tdie"):
+		return "SoC die temperature, read via the power-management unit (PMU)"
+	case strings.Contains(lower, "nand"):
+		return "SSD flash memory (NAND) temperature"
+	case strings.Contains(lower, "gas gauge"):
+		return "Battery temperature from its gas-gauge chip"
+	case strings.Contains(lower, "gpu"):
+		return "GPU die temperature"
+	default:
+		return ""
+	}
+}
+
 func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,gocyclo // Sensor-specific closures provide independent fallbacks.
 	g := group{
 		emoji: "🌡️",
@@ -628,6 +698,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 			{
 				id:    "temp.cpu",
 				label: labelCPU,
+				tip:   "Average of the CPU die temperature sensors",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.CPU == 0 {
 						return "—"
@@ -646,6 +717,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 			{
 				id:    "temp.gpu",
 				label: labelGPU,
+				tip:   "Average of the GPU die temperature sensors",
 				tag:   "G",
 				sym:   "G",
 				menu: func(s entity.Snapshot, c config.Config) string {
@@ -666,6 +738,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 			{
 				id:    metricHottestTemperature,
 				label: "Hottest",
+				tip:   "The hottest of all temperature sensors right now, and its name",
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.Hottest.Name == "" {
 						return "—"
@@ -695,6 +768,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 		g.metrics = append(g.metrics, metric{
 			id:    entity.MetricID("temp.sensor." + name),
 			label: name,
+			tip:   tempSensorTip(name),
 			menu: func(s entity.Snapshot, c config.Config) string {
 				if s.Temps != nil {
 					for _, r := range s.Temps.All {
@@ -719,6 +793,7 @@ func tempDerivedMetrics() []metric {
 		{
 			id:    "temp.avg",
 			label: "Average",
+			tip:   "Average of all temperature sensors",
 			menu: func(s entity.Snapshot, c config.Config) string {
 				if s.Temps == nil || s.Temps.Avg == 0 {
 					return "—"
@@ -737,6 +812,7 @@ func tempDerivedMetrics() []metric {
 		{
 			id:    "temp.coolest",
 			label: "Coolest",
+			tip:   "The coolest of all temperature sensors right now",
 			menu: func(s entity.Snapshot, c config.Config) string {
 				if s.Temps == nil || s.Temps.Coolest.Name == "" {
 					return "—"
