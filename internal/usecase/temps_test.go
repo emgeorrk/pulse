@@ -6,6 +6,40 @@ import (
 	"github.com/emgeorrk/pulse/internal/entity"
 )
 
+func TestTempSensorPredicates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		sensor  string
+		wantCPU bool
+		wantGPU bool
+	}{
+		{name: "M5 tdie", sensor: "PMU tdie3", wantCPU: true},
+		{name: "M1 performance cluster", sensor: "pACC MTR Temp Sensor1", wantCPU: true},
+		{name: "SoC sensor", sensor: "SOC MTR Temp Sensor0", wantCPU: true},
+		{name: "intel CPU proximity", sensor: "CPU proximity", wantCPU: true},
+		{name: "GPU beats the soc marker", sensor: "GPU SOC sensor", wantGPU: true},
+		{name: "synthesized SMC average", sensor: "GPU die", wantGPU: true},
+		{name: "SSD is neither", sensor: "NAND CH0 temp"},
+		{name: "battery is neither", sensor: "gas gauge battery"},
+		{name: "empty name is neither", sensor: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsCPUTempSensor(tt.sensor); got != tt.wantCPU {
+				t.Errorf("IsCPUTempSensor(%q) = %v, want %v", tt.sensor, got, tt.wantCPU)
+			}
+
+			if got := IsGPUTempSensor(tt.sensor); got != tt.wantGPU {
+				t.Errorf("IsGPUTempSensor(%q) = %v, want %v", tt.sensor, got, tt.wantGPU)
+			}
+		})
+	}
+}
+
 func TestAggregateTemps(t *testing.T) {
 	t.Parallel()
 

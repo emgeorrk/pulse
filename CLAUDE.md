@@ -93,8 +93,7 @@ point. Handle fanless models (MacBook Air) — no fan sensors, hide the section.
 | Memory | `host_statistics64` / `vm_statistics64` | same |
 | Network | `getifaddrs()` deltas | same |
 | Disk | `statfs` usage; IOKit for I/O | same |
-| Temps | `IOHIDEventSystemClient` (HID hub, LE float); GPU fallback via SMC `Tg*` | SMC keys (`TC0P…`, sp78) — **untested** |
-| Voltage | HID sensor hub | — |
+| Temps | `IOHIDEventSystemClient` (HID hub, LE float); GPU fallback via SMC `Tg*`. Sensors feeding the CPU/GPU aggregates (tdie, gpu, …) get no per-sensor menu row | SMC keys (`TC0P…`, sp78) — **untested** |
 | Fans | SMC `F%dAc`, type `flt ` LE | SMC, `fpe2` big-endian — **untested** |
 | Power | IOReport Energy Model | — |
 | CPU freq | IOReport perf states × device-tree freq tables | — |

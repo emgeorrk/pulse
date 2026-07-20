@@ -15,9 +15,7 @@ func fullCaps() entity.Caps {
 		NetIfaces:    []string{"en0"},
 		Disk:         true,
 		Temps:        true,
-		TempSensors:  []string{"PMU tdie0"},
-		Volts:        true,
-		VoltSensors:  []string{"PMU vbus"},
+		TempSensors:  []string{"PMU tdie0", "NAND CH0 temp", "gas gauge battery", "GPU die"},
 		Fans:         true,
 		FanCount:     1,
 		Battery:      true,
@@ -233,10 +231,135 @@ func TestNewRegistersAllMetricsAsPinnable(t *testing.T) {
 		t.Errorf("bar has %d metrics, groups have %d", len(tr.bar), total)
 	}
 
-	for _, id := range []entity.MetricID{"disk.free", "temp.hottest", "mem.available", "cpu.core.1", "temp.sensor.PMU tdie0", "batt.raw"} {
+	for _, id := range []entity.MetricID{"disk.free", "temp.hottest", "mem.available", "cpu.core.1", "temp.sensor.NAND CH0 temp", "temp.sensor.gas gauge battery", "batt.raw"} {
 		if _, ok := tr.bar[id]; !ok {
 			t.Errorf("%s missing from the bar map", id)
 		}
+	}
+
+	// Sensors feeding the CPU/GPU aggregates get no row of their own.
+	for _, id := range []entity.MetricID{"temp.sensor.PMU tdie0", "temp.sensor.GPU die"} {
+		if _, ok := tr.bar[id]; ok {
+			t.Errorf("%s should be hidden from the bar map", id)
+		}
+	}
+}
+
+// visibleTempSensors hides the aggregate feeders, renames the known sensors
+// and falls back to raw names when a label would collide.
+func TestVisibleTempSensors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		names []string
+		want  []tempSensorRow
+	}{
+		{
+			name:  "aggregate feeders are hidden",
+			names: []string{"PMU tdie0", "PMU tdie1", "GPU die", "pACC MTR Temp Sensor1"},
+			want:  []tempSensorRow{},
+		},
+		{
+			name:  "known sensors get friendly labels",
+			names: []string{"NAND CH0 temp", "gas gauge battery"},
+			want: []tempSensorRow{
+				{raw: "NAND CH0 temp", label: "SSD"},
+				{raw: "gas gauge battery", label: "Battery"},
+			},
+		},
+		{
+			name:  "unknown sensor keeps its raw name",
+			names: []string{"Airflow left"},
+			want:  []tempSensorRow{{raw: "Airflow left", label: "Airflow left"}},
+		},
+		{
+			name:  "label collision falls back to raw names",
+			names: []string{"NAND CH0 temp", "NAND CH1 temp"},
+			want: []tempSensorRow{
+				{raw: "NAND CH0 temp", label: "NAND CH0 temp"},
+				{raw: "NAND CH1 temp", label: "NAND CH1 temp"},
+			},
+		},
+		{
+			name:  "mixed set on an M5",
+			names: []string{"PMU tdie0", "NAND CH0 temp", "gas gauge battery", "GPU die"},
+			want: []tempSensorRow{
+				{raw: "NAND CH0 temp", label: "SSD"},
+				{raw: "gas gauge battery", label: "Battery"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := visibleTempSensors(tt.names)
+			if len(got) != len(tt.want) {
+				t.Fatalf("visibleTempSensors(%v) = %v, want %v", tt.names, got, tt.want)
+			}
+
+			for i, row := range got {
+				if row != tt.want[i] {
+					t.Errorf("row %d = %+v, want %+v", i, row, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+// A hardware set where every sensor feeds an aggregate must still produce
+// the Temp group with its fixed and derived rows — just no per-sensor ones.
+func TestTempGroupWithOnlyAggregateSensors(t *testing.T) {
+	t.Parallel()
+
+	g := tempGroup([]string{"PMU tdie0", "PMU tdie1"})
+
+	for _, m := range g.metrics {
+		switch m.id {
+		case "temp.cpu", "temp.gpu", "temp.hottest", "temp.avg", "temp.coolest":
+		default:
+			t.Errorf("unexpected per-sensor metric %s", m.id)
+		}
+	}
+
+	if len(g.metrics) != 5 {
+		t.Errorf("got %d metrics, want the 3 fixed + 2 derived", len(g.metrics))
+	}
+}
+
+// Hottest/Coolest show the sensor through its friendly label, not the raw
+// hardware name.
+func TestHottestCoolestFriendlyName(t *testing.T) {
+	t.Parallel()
+
+	snap := sampleSnapshot()
+	snap.Temps.Hottest = entity.Reading{Name: "GPU die", Value: 61}
+	snap.Temps.Coolest = entity.Reading{Name: "gas gauge battery", Value: 30}
+
+	tests := []struct {
+		name string
+		id   entity.MetricID
+		want string
+	}{
+		{name: "hottest maps GPU die", id: "temp.hottest", want: "61°C (GPU)"},
+		{name: "coolest maps gas gauge", id: "temp.coolest", want: "30°C (Battery)"},
+	}
+
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m, ok := tr.bar[tt.id]
+			if !ok {
+				t.Fatalf("%s missing from the bar map", tt.id)
+			}
+
+			if got := m.menu(snap, config.Config{}); got != tt.want {
+				t.Errorf("menu = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -254,11 +377,16 @@ func sampleSnapshot() entity.Snapshot {
 			ReadRate:  1 << 20, WriteRate: 1 << 19, ReadTotal: 10 << 30, WriteTotal: 5 << 30,
 		},
 		Temps: &entity.TempStats{
-			CPU: 54, GPU: 48,
+			CPU: 54, GPU: 48, Avg: 47,
 			Hottest: entity.Reading{Name: "PMU tdie0", Value: 61},
-			All:     []entity.Reading{{Name: "PMU tdie0", Value: 61}},
+			Coolest: entity.Reading{Name: "gas gauge battery", Value: 33},
+			All: []entity.Reading{
+				{Name: "PMU tdie0", Value: 61},
+				{Name: "NAND CH0 temp", Value: 36},
+				{Name: "gas gauge battery", Value: 33},
+				{Name: "GPU die", Value: 48},
+			},
 		},
-		Volts:   []entity.Reading{{Name: "PMU vbus", Value: 13.08}},
 		Fans:    []entity.Fan{{Name: "Fan 1", RPM: 1850, Max: 5000}},
 		Battery: &entity.BatteryStats{Percent: 0.87, RawPercent: 0.85, Health: 0.95, Cycles: 120, TempC: 32, Volts: 12.3, Watts: -8.4, MinutesLeft: 185},
 		GPU:     &entity.GPUStats{Utilization: 0.33},
@@ -284,7 +412,6 @@ func fallbackSnapshot() entity.Snapshot {
 			Hottest: entity.Reading{Name: "PMU tdie0", Value: 60},
 			All:     []entity.Reading{{Name: "PMU tdie0", Value: 60}},
 		},
-		Volts:   []entity.Reading{{Name: "PMU vbus", Value: 12}},
 		Fans:    []entity.Fan{{Name: "Fan 1", RPM: 1200, Max: 0}}, // Max 0 → no load percentage
 		Battery: &entity.BatteryStats{Percent: 0.5, Health: 0, Cycles: 0, External: true, Charging: false, MinutesLeft: -1},
 		GPU:     &entity.GPUStats{Utilization: 0.1},

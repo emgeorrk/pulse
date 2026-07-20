@@ -228,45 +228,6 @@ func (mr *MockTempSourceMockRecorder) Temps() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Temps", reflect.TypeOf((*MockTempSource)(nil).Temps))
 }
 
-// MockVoltSource is a mock of VoltSource interface.
-type MockVoltSource struct {
-	ctrl     *gomock.Controller
-	recorder *MockVoltSourceMockRecorder
-	isgomock struct{}
-}
-
-// MockVoltSourceMockRecorder is the mock recorder for MockVoltSource.
-type MockVoltSourceMockRecorder struct {
-	mock *MockVoltSource
-}
-
-// NewMockVoltSource creates a new mock instance.
-func NewMockVoltSource(ctrl *gomock.Controller) *MockVoltSource {
-	mock := &MockVoltSource{ctrl: ctrl}
-	mock.recorder = &MockVoltSourceMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockVoltSource) EXPECT() *MockVoltSourceMockRecorder {
-	return m.recorder
-}
-
-// Voltages mocks base method.
-func (m *MockVoltSource) Voltages() ([]entity.Reading, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Voltages")
-	ret0, _ := ret[0].([]entity.Reading)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Voltages indicates an expected call of Voltages.
-func (mr *MockVoltSourceMockRecorder) Voltages() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Voltages", reflect.TypeOf((*MockVoltSource)(nil).Voltages))
-}
-
 // MockFanSource is a mock of FanSource interface.
 type MockFanSource struct {
 	ctrl     *gomock.Controller

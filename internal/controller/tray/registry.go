@@ -20,6 +20,7 @@ const (
 	labelFree                = "Free"
 	labelTotal               = "Total"
 	labelVoltage             = "Voltage"
+	labelBattery             = "Battery"
 	tagCPU                   = "CPU "
 	tagSwap                  = "SW "
 	tagRead                  = "R "
@@ -307,10 +308,6 @@ func buildGroups(hw entity.HWInfo, caps entity.Caps) []group { //nolint:cyclop,f
 		groups = append(groups, fanGroup(caps.FanCount))
 	}
 
-	if caps.Volts {
-		groups = append(groups, voltGroup(caps.VoltSensors))
-	}
-
 	if caps.Net {
 		groups = append(groups, netGroup(caps.NetIfaces))
 	}
@@ -519,7 +516,7 @@ func batteryGroup() group { //nolint:cyclop,funlen,gocognit,gocyclo // Optional 
 	return group{
 		emoji: "🔋",
 		icon:  icons.Battery,
-		label: "Battery",
+		label: labelBattery,
 		aggregate: func(s entity.Snapshot, c config.Config) string {
 			if s.Battery == nil {
 				return "—"
@@ -745,7 +742,7 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 					}
 
 					return format.Temp(s.Temps.Hottest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision) +
-						" (" + s.Temps.Hottest.Name + ")"
+						" (" + tempSensorLabel(s.Temps.Hottest.Name) + ")"
 				},
 				bar: func(s entity.Snapshot, c config.Config) string {
 					if s.Temps == nil || s.Temps.Hottest.Name == "" {
@@ -764,11 +761,18 @@ func tempGroup(sensorNames []string) group { //nolint:cyclop,funlen,gocognit,goc
 		g.metrics = append(g.metrics, tempDerivedMetrics()...)
 	}
 
-	for _, name := range sensorNames {
+	for _, row := range visibleTempSensors(sensorNames) {
+		name := row.raw
+
+		tip := tempSensorTip(name)
+		if tip != "" && row.label != name {
+			tip += " (sensor: " + name + ")"
+		}
+
 		g.metrics = append(g.metrics, metric{
 			id:    entity.MetricID("temp.sensor." + name),
-			label: name,
-			tip:   tempSensorTip(name),
+			label: row.label,
+			tip:   tip,
 			menu: func(s entity.Snapshot, c config.Config) string {
 				if s.Temps != nil {
 					for _, r := range s.Temps.All {
@@ -819,7 +823,7 @@ func tempDerivedMetrics() []metric {
 				}
 
 				return format.Temp(s.Temps.Coolest.Value, c.TempUnit == config.Fahrenheit, c.HigherPrecision) +
-					" (" + s.Temps.Coolest.Name + ")"
+					" (" + tempSensorLabel(s.Temps.Coolest.Name) + ")"
 			},
 			bar: func(s entity.Snapshot, c config.Config) string {
 				if s.Temps == nil || s.Temps.Coolest.Name == "" {
@@ -872,39 +876,6 @@ func fanGroup(count int) group { //nolint:gocognit // Each fan metric formats cu
 				}
 
 				return "—rpm"
-			},
-		})
-	}
-
-	return g
-}
-
-func voltGroup(sensorNames []string) group {
-	g := group{
-		emoji: "⚡",
-		icon:  icons.Voltage,
-		label: labelVoltage,
-		aggregate: func(s entity.Snapshot, c config.Config) string {
-			if len(s.Volts) == 0 {
-				return "—"
-			}
-
-			return format.Volts(s.Volts[0].Value)
-		},
-	}
-
-	for _, name := range sensorNames {
-		g.metrics = append(g.metrics, metric{
-			id:    entity.MetricID("volt.sensor." + name),
-			label: name,
-			menu: func(s entity.Snapshot, c config.Config) string {
-				for _, r := range s.Volts {
-					if r.Name == name {
-						return format.Volts(r.Value)
-					}
-				}
-
-				return "—"
 			},
 		})
 	}

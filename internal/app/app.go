@@ -73,9 +73,9 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) { //nolint:cy
 		caps.System = true
 	}
 
-	// ── temps and voltage: Intel and Apple Silicon paths differ ──
-	if hw.IsAppleSilicon { //nolint:nestif // HID exposes two independently optional sensor classes.
-		// Apple Silicon: HID is primary for temperatures and voltage.
+	// ── temps: Intel and Apple Silicon paths differ ──
+	if hw.IsAppleSilicon {
+		// Apple Silicon: HID is primary for temperatures.
 		if hid, err := sensors.NewHID(); err == nil {
 			if temps, err := hid.Temps(); err == nil {
 				src.Temp = hid
@@ -83,15 +83,6 @@ func probe(hw entity.HWInfo) (sensors.Sources, entity.Caps, error) { //nolint:cy
 				caps.Temps = true
 				for _, r := range temps {
 					caps.TempSensors = append(caps.TempSensors, r.Name)
-				}
-			}
-
-			if volts, err := hid.Voltages(); err == nil {
-				src.Volt = hid
-
-				caps.Volts = true
-				for _, r := range volts {
-					caps.VoltSensors = append(caps.VoltSensors, r.Name)
 				}
 			}
 		}
@@ -292,16 +283,6 @@ func RunOnce() error { //nolint:cyclop,funlen,gocognit,gocyclo // The diagnostic
 		}
 	} else {
 		fmt.Fprintln(out, "Fans: unavailable")
-	}
-
-	if len(snap.Volts) > 0 {
-		fmt.Fprintf(out, "Voltage: %d sensors\n", len(snap.Volts))
-
-		for _, r := range snap.Volts {
-			fmt.Fprintf(out, "  %-40s %s\n", r.Name, format.Volts(r.Value))
-		}
-	} else {
-		fmt.Fprintln(out, "Voltage: unavailable")
 	}
 
 	if snap.GPU != nil {

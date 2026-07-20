@@ -43,11 +43,6 @@ type TempSource interface {
 	Temps() ([]entity.Reading, error)
 }
 
-// VoltSource returns voltage sensor readings, in volts.
-type VoltSource interface {
-	Voltages() ([]entity.Reading, error)
-}
-
 // FanSource returns fan RPMs (SMC on both platforms).
 type FanSource interface {
 	Fans() ([]entity.Fan, error)
@@ -96,7 +91,6 @@ type Sources struct {
 	Net      NetSource
 	Disk     DiskSource
 	Temp     TempSource
-	Volt     VoltSource
 	Fan      FanSource
 	Battery  BatterySource
 	GPU      GPUSource

@@ -185,13 +185,11 @@ type FreqStats struct {
 // Caps records which metric groups are actually available on this hardware;
 // the UI hides groups that aren't (per CLAUDE.md: hide, don't crash).
 type Caps struct {
-	VoltSensors  []string
 	NetIfaces    []string
 	FreqClusters []string
 	TempSensors  []string
 	FanCount     int
 	Temps        bool
-	Volts        bool
 	Fans         bool
 	Net          bool
 	Battery      bool
@@ -213,7 +211,6 @@ type Snapshot struct {
 	Power   *PowerStats
 	Freq    *FreqStats
 	System  *SystemStats
-	Volts   []Reading
 	Fans    []Fan
 	CPU     CPUStats
 	Mem     MemStats
