@@ -220,13 +220,14 @@ func setTemplateIcon(item *systray.MenuItem, style config.VisualStyle, key strin
 }
 
 // The Settings dropdown: every multi-choice setting is a submenu whose
-// parent row carries the current value ("Temperature: °C"), the boolean
+// parent row carries the current value ("Temperature: °C"), the update
+// interval is a flat prompt row opening an input dialog, the boolean
 // toggles stay flat, and separators split the choice / toggle / login blocks.
 func (t *Tray) buildSettings(cfg config.Config) {
 	s := systray.AddMenuItem("Settings", "")
 	t.settings = s
 
-	t.addStepper(s, "Update interval", intervalStepper(), cfg)
+	t.addIntervalPrompt(s, cfg)
 	t.addRadioGroup(s, "Temperature", tempOptions(cfg))
 	t.addRadioGroup(s, "Memory units", memoryOptions(cfg))
 	t.addRadioGroup(s, iconsLabel, iconOptions(cfg))

@@ -21,11 +21,10 @@ const (
 )
 
 // MinIntervalSeconds and MaxIntervalSeconds bound the sampling interval the
-// Settings stepper can set; IntervalStepSeconds is how much one click changes it.
+// Settings prompt can set.
 const (
-	MinIntervalSeconds  = 1
-	MaxIntervalSeconds  = 60
-	IntervalStepSeconds = 1
+	MinIntervalSeconds = 1
+	MaxIntervalSeconds = 60
 )
 
 type TempUnit string
