@@ -16,5 +16,8 @@ func SetTitleParts(parts []TitlePart) {
 	SetTitle(string(b))
 }
 
+// SetTitleFixedWidth is a no-op outside macOS.
+func SetTitleFixedWidth(on bool) {}
+
 // ClearIcon is a no-op outside macOS.
 func (item *MenuItem) ClearIcon() {}

@@ -89,6 +89,8 @@ func (t *Tray) build() {
 
 	cfg := t.store.Get()
 
+	systray.SetTitleFixedWidth(cfg.FixedWidth)
+
 	for gi := range t.groups {
 		g := &t.groups[gi]
 
@@ -236,6 +238,7 @@ func (t *Tray) buildSettings(cfg config.Config) {
 	t.addToggle(s, "Show public IP", cfg.ShowPublicIP, func(c *config.Config) *bool { return &c.ShowPublicIP })
 	t.addToggle(s, "Higher precision", cfg.HigherPrecision, func(c *config.Config) *bool { return &c.HigherPrecision })
 	t.addToggle(s, "CPU sparkline in bar", cfg.ShowSparkline, func(c *config.Config) *bool { return &c.ShowSparkline })
+	t.addToggle(s, "Fixed width", cfg.FixedWidth, func(c *config.Config) *bool { return &c.FixedWidth })
 
 	tips := s.AddSubMenuItemCheckbox("Hide metric tooltips", "", cfg.HideTips)
 
@@ -507,6 +510,10 @@ func (t *Tray) refresh() {
 	t.mu.Lock()
 	snap, ok := t.last, t.seen
 	t.mu.Unlock()
+
+	// Each call resets the tracked max width, so the title re-fits after a
+	// config change (an unpin shrinks the item once instead of never).
+	systray.SetTitleFixedWidth(t.store.Get().FixedWidth)
 
 	if ok {
 		t.render(snap)

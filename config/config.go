@@ -72,6 +72,9 @@ type Config struct {
 	StartAtLogin    bool              `json:"start_at_login"`
 	HigherPrecision bool              `json:"higher_precision"`
 	ShowPublicIP    bool              `json:"show_public_ip"`
+	// FixedWidth pins the menu bar item to its widest recent title so live
+	// value changes don't shift neighboring status items.
+	FixedWidth bool `json:"fixed_width"`
 	// HideTips is inverted so the zero value keeps tooltips visible for
 	// configs saved before the field existed.
 	HideTips bool `json:"hide_tooltips"`
