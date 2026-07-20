@@ -16,6 +16,7 @@ size=64
 
 for svg_dir in "$svg_root"/*/; do
   style="$(basename "$svg_dir")"
+  if [ "$style" = "flags" ]; then continue; fi # full color, rendered below
   png_dir="$png_root/$style"
   mkdir -p "$png_dir"
 
@@ -39,6 +40,24 @@ for svg_dir in "$svg_root"/*/; do
   swift "$root/scripts/sfsymbol2png.swift" powerplug.fill "$png_root/$style/power.png" "$size"
   echo "$png_root/$style/power.png"
 done
+
+# Country flags (full color, shared by the gnome and classic styles). Unlike
+# the glyph packs the RGB channels matter; several flags use SVG features
+# (<marker> in us.svg) that NSImage's renderer mishandles, so rsvg-convert
+# is required here — no svg2png.swift fallback.
+flags_dir="$svg_root/flags"
+if [ -d "$flags_dir" ]; then
+  command -v rsvg-convert >/dev/null 2>&1 || {
+    echo "gen-icons.sh: rsvg-convert required for flags (brew install librsvg)" >&2
+    exit 1
+  }
+  mkdir -p "$png_root/flags"
+  for svg in "$flags_dir"/*.svg; do
+    out="$png_root/flags/$(basename "$svg" .svg).png"
+    rsvg-convert -w "$size" -h "$size" "$svg" -o "$out"
+    echo "$out"
+  done
+fi
 
 # The Vitals sets also have no gear, info or activity glyphs; the Settings,
 # About and Activity Monitor items use SF Symbols instead. These are

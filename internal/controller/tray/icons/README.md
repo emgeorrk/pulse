@@ -14,6 +14,14 @@ The PNGs in `png/<style>/` are rendered from them by `scripts/gen-icons.sh`
 template-rendered (menu items) or tinted to the menu bar text color (title), so
 only the alpha channel is used.
 
+`svg/flags/` is the square (1x1) country-flag set of
+[lipis/flag-icons](https://github.com/lipis/flag-icons), vendored via Vitals
+(only the two-letter ISO 3166-1 alpha-2 files — all a geo-IP lookup can
+produce). Unlike the glyph packs they are rendered **full color** into
+`png/flags/` (rsvg-convert only: `us.svg` needs SVG features NSImage
+mishandles), shared by the gnome and classic styles, and drawn untinted next
+to the public IP.
+
 ## Provenance and license
 
 Vitals is licensed under **GPL-2.0**; both packs (`svg/gnome/` and
@@ -24,6 +32,10 @@ originates from:
 - `memory`, `network*`, `system`, `voltage` — GNOME [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit)
 - `fan` — inherited from the Freon extension (modified)
 - `temperature`, `cpu` — designed by [daudix](https://daudix.github.io)
+
+The country flags (`svg/flags/`) are from
+[lipis/flag-icons](https://github.com/lipis/flag-icons), **MIT** licensed —
+see `svg/flags/flag-icons.LICENSE` kept alongside the sources.
 
 Some glyphs are not from Vitals; they are Apple SF Symbols rendered by
 `scripts/sfsymbol2png.swift` for icons the Vitals set lacks. SF Symbols may
