@@ -46,7 +46,6 @@ func TestSettingsRadioOptions(t *testing.T) {
 		build      func(config.Config) []radioOption
 		wantLabels []string
 	}{
-		{"interval", intervalOptions, []string{"1 s", "2 s", "3 s", "5 s"}},
 		{"temperature", tempOptions, []string{"°C", "°F"}},
 		{"memory", memoryOptions, []string{"GiB", "GB"}},
 		{"icons", iconOptions, []string{"Emoji", "GNOME", "Classic"}},

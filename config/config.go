@@ -20,6 +20,14 @@ const (
 	privateFileMode        = 0o600
 )
 
+// MinIntervalSeconds and MaxIntervalSeconds bound the sampling interval the
+// Settings stepper can set; IntervalStepSeconds is how much one click changes it.
+const (
+	MinIntervalSeconds  = 1
+	MaxIntervalSeconds  = 60
+	IntervalStepSeconds = 1
+)
+
 type TempUnit string
 
 const (
@@ -81,12 +89,22 @@ func defaults() Config {
 	}
 }
 
-func (c Config) Interval() time.Duration {
-	if c.IntervalSec < 1 {
-		return defaultIntervalSeconds * time.Second
+// normalizeIntervalSec maps a stored interval to a usable one: below-min
+// (including zero, i.e. the field was missing) falls back to the default,
+// above-max clamps to the max.
+func normalizeIntervalSec(sec int) int {
+	switch {
+	case sec < MinIntervalSeconds:
+		return defaultIntervalSeconds
+	case sec > MaxIntervalSeconds:
+		return MaxIntervalSeconds
+	default:
+		return sec
 	}
+}
 
-	return time.Duration(c.IntervalSec) * time.Second
+func (c Config) Interval() time.Duration {
+	return time.Duration(normalizeIntervalSec(c.IntervalSec)) * time.Second
 }
 
 func (c Config) IsPinned(id entity.MetricID) bool {
@@ -131,9 +149,7 @@ func Load(path string) *Store {
 		return s
 	}
 
-	if c.IntervalSec < 1 {
-		c.IntervalSec = defaults().IntervalSec
-	}
+	c.IntervalSec = normalizeIntervalSec(c.IntervalSec)
 
 	if c.TempUnit != Fahrenheit {
 		c.TempUnit = Celsius
