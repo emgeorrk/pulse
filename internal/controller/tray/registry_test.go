@@ -112,27 +112,44 @@ func TestBarPartStyles(t *testing.T) {
 	gnome := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualGnome}
 	classic := config.Config{BarLabels: config.BarVisual, VisualStyle: config.VisualClassic}
 
+	// Snapshots for the net.ip flag fallback rows: no Net at all, a provider
+	// without geolocation (empty country), and a country with no flag asset —
+	// all must fall back to the group network icon.
+	noNet := entity.Snapshot{}
+	noCountry := sampleSnapshot()
+	noCountry.Net.IPCountry = ""
+	noAsset := sampleSnapshot()
+	noAsset.Net.IPCountry = "ZZ"
+
 	tests := []struct {
 		name     string
 		id       entity.MetricID
 		cfg      config.Config
+		snap     *entity.Snapshot // nil → the shared sample frame
 		wantIcon string
 		prefix   string // expected text before the bar value
 	}{
-		{"cpu.total text", "cpu.total", text, "", "CPU "},
-		{"cpu.total emoji", "cpu.total", emoji, "", "⚙️ "},
-		{"cpu.total gnome", "cpu.total", gnome, "gnome/cpu", " "},
-		{"cpu.total classic", "cpu.total", classic, "classic/cpu", " "},
-		{"net.down text", "net.down", text, "", "↓"},
-		{"net.down emoji", "net.down", emoji, "", "📶 ↓"},
-		{"net.down gnome", "net.down", gnome, "gnome/network-download", " "}, // own icon → no ↓
-		{"net.down classic", "net.down", classic, "classic/network-download", " "},
-		{"swap.used text", "swap.used", text, "", "SW "},
-		{"swap.used emoji", "swap.used", emoji, "", "🧠 SW "},
-		{"swap.used gnome", "swap.used", gnome, "gnome/memory", " SW "}, // group icon → keep SW
-		{"swap.used classic", "swap.used", classic, "classic/memory", " SW "},
-		{"mem.used text", "mem.used", text, "", ""},
-		{"mem.used emoji", "mem.used", emoji, "", "🧠 "},
+		{"cpu.total text", "cpu.total", text, nil, "", "CPU "},
+		{"cpu.total emoji", "cpu.total", emoji, nil, "", "⚙️ "},
+		{"cpu.total gnome", "cpu.total", gnome, nil, "gnome/cpu", " "},
+		{"cpu.total classic", "cpu.total", classic, nil, "classic/cpu", " "},
+		{"net.down text", "net.down", text, nil, "", "↓"},
+		{"net.down emoji", "net.down", emoji, nil, "", "📶 ↓"},
+		{"net.down gnome", "net.down", gnome, nil, "gnome/network-download", " "}, // own icon → no ↓
+		{"net.down classic", "net.down", classic, nil, "classic/network-download", " "},
+		{"swap.used text", "swap.used", text, nil, "", "SW "},
+		{"swap.used emoji", "swap.used", emoji, nil, "", "🧠 SW "},
+		{"swap.used gnome", "swap.used", gnome, nil, "gnome/memory", " SW "}, // group icon → keep SW
+		{"swap.used classic", "swap.used", classic, nil, "classic/memory", " SW "},
+		{"mem.used text", "mem.used", text, nil, "", ""},
+		{"mem.used emoji", "mem.used", emoji, nil, "", "🧠 "},
+		{"net.ip text", "net.ip", text, nil, "", ""},
+		{"net.ip emoji", "net.ip", emoji, nil, "", "📶 "},
+		{"net.ip gnome", "net.ip", gnome, nil, "flag/nl", " "}, // the country flag replaces the icon
+		{"net.ip classic", "net.ip", classic, nil, "flag/nl", " "},
+		{"net.ip gnome no net", "net.ip", gnome, &noNet, "gnome/network", " "},
+		{"net.ip gnome no country", "net.ip", gnome, &noCountry, "gnome/network", " "},
+		{"net.ip gnome no flag asset", "net.ip", gnome, &noAsset, "gnome/network", " "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -143,13 +160,57 @@ func TestBarPartStyles(t *testing.T) {
 				t.Fatalf("%s missing from the bar map", tt.id)
 			}
 
-			icon, got := m.barPart(snap, tt.cfg)
+			frame := snap
+			if tt.snap != nil {
+				frame = *tt.snap
+			}
+
+			icon, got := m.barPart(frame, tt.cfg)
 			if icon != tt.wantIcon {
 				t.Errorf("%s: icon = %q, want %q", tt.name, icon, tt.wantIcon)
 			}
 
-			if want := tt.prefix + m.barValue(snap, tt.cfg); got != want {
+			if want := tt.prefix + m.barValue(frame, tt.cfg); got != want {
 				t.Errorf("%s: text = %q, want %q", tt.name, got, want)
+			}
+		})
+	}
+}
+
+// The Public IP row text: the icon-pack styles show the flag as an image, so
+// their text stays bare; the emoji style keeps the emoji flag inline.
+func TestPublicIPMenuText(t *testing.T) {
+	t.Parallel()
+
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+
+	noIP := sampleSnapshot()
+	noIP.Net.PublicIP = ""
+
+	tests := []struct {
+		name string
+		cfg  config.Config
+		snap entity.Snapshot
+		want string
+	}{
+		{name: "gnome bare", cfg: config.Config{VisualStyle: config.VisualGnome}, snap: sampleSnapshot(), want: "1.2.3.4"},
+		{name: "classic bare", cfg: config.Config{VisualStyle: config.VisualClassic}, snap: sampleSnapshot(), want: "1.2.3.4"},
+		{name: "emoji keeps flag", cfg: config.Config{VisualStyle: config.VisualEmoji}, snap: sampleSnapshot(), want: "1.2.3.4 🇳🇱"},
+		{name: "zero config keeps flag", cfg: config.Config{}, snap: sampleSnapshot(), want: "1.2.3.4 🇳🇱"},
+		{name: "no net", cfg: config.Config{VisualStyle: config.VisualGnome}, snap: entity.Snapshot{}, want: "—"},
+		{name: "no ip", cfg: config.Config{VisualStyle: config.VisualGnome}, snap: noIP, want: "—"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m, ok := tr.bar[metricNetworkIP]
+			if !ok {
+				t.Fatal("net.ip missing from the bar map")
+			}
+
+			if got := m.menu(tt.snap, tt.cfg); got != tt.want {
+				t.Errorf("menu = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -185,7 +246,8 @@ func sampleSnapshot() entity.Snapshot {
 		Mem: entity.MemStats{Total: 16 << 30, Used: 8 << 30, Available: 8 << 30, SwapUsed: 1 << 30},
 		Net: &entity.NetStats{
 			Down: 1200, Up: 300, SessionDown: 5 << 20, SessionUp: 1 << 20,
-			Ifaces: []entity.NetIface{{Name: "en0", Down: 1200, Up: 300}},
+			Ifaces:   []entity.NetIface{{Name: "en0", Down: 1200, Up: 300}},
+			PublicIP: "1.2.3.4", IPCountry: "NL",
 		},
 		Disk: &entity.DiskStats{
 			DiskUsage: entity.DiskUsage{Total: 500 << 30, Used: 300 << 30, Available: 200 << 30},

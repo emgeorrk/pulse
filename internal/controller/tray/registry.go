@@ -32,6 +32,7 @@ const (
 	metricSwapUsed           = "swap.used"
 	metricHottestTemperature = "temp.hottest"
 	metricNetworkDownload    = "net.down"
+	metricNetworkIP          = "net.ip"
 	metricDiskFree           = "disk.free"
 	// Battery charging marks: a color emoji for the emoji icon set, a
 	// monochrome text glyph for the template-icon packs (see chargeMark).
@@ -46,10 +47,13 @@ const (
 // otherwise ambiguous metrics apart when the visual is group-level (net
 // ↓/↑, disk R/W, swap). emoji, icon and iconQual are filled from the group
 // in fill(); a metric-level icon (network arrows) already carries the
-// qualifier, so its iconQual stays empty.
+// qualifier, so its iconQual stays empty. barIcon, when set, may override
+// the title-icon key per snapshot (the public IP's country flag); an empty
+// return falls back to the static icon.
 type metric struct {
 	menu     func(s entity.Snapshot, c config.Config) string
 	bar      func(s entity.Snapshot, c config.Config) string
+	barIcon  func(s entity.Snapshot, c config.Config) string
 	id       entity.MetricID
 	label    string
 	tag      string
@@ -78,7 +82,14 @@ func (m metric) barPart(s entity.Snapshot, c config.Config) (iconKey, text strin
 	}
 
 	if c.VisualStyle.UsesTemplateIcons() {
-		return icons.TitleKey(string(c.VisualStyle), m.icon), " " + m.iconQual + val
+		key := icons.TitleKey(string(c.VisualStyle), m.icon)
+		if m.barIcon != nil {
+			if k := m.barIcon(s, c); k != "" {
+				key = k
+			}
+		}
+
+		return key, " " + m.iconQual + val
 	}
 
 	return "", m.emoji + " " + m.sym + val
@@ -902,14 +913,40 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 				},
 			},
 			{
-				id:    "net.ip",
+				id:    metricNetworkIP,
 				label: "Public IP",
+				// The icon-pack styles show the flag as an image (the row's
+				// icon in the dropdown, a color title icon in the bar), so
+				// the text stays bare there; the emoji style and the text
+				// bar mode keep the emoji flag inline.
 				menu: func(s entity.Snapshot, c config.Config) string {
 					if s.Net == nil || s.Net.PublicIP == "" {
 						return "—"
 					}
 
+					if c.VisualStyle.UsesTemplateIcons() {
+						return s.Net.PublicIP
+					}
+
 					return format.WithFlag(s.Net.PublicIP, s.Net.IPCountry)
+				},
+				bar: func(s entity.Snapshot, c config.Config) string {
+					if s.Net == nil || s.Net.PublicIP == "" {
+						return "—"
+					}
+
+					if c.BarLabels == config.BarVisual && c.VisualStyle.UsesTemplateIcons() {
+						return s.Net.PublicIP
+					}
+
+					return format.WithFlag(s.Net.PublicIP, s.Net.IPCountry)
+				},
+				barIcon: func(s entity.Snapshot, _ config.Config) string {
+					if s.Net == nil || icons.FlagPNG(s.Net.IPCountry) == nil {
+						return "" // unknown country → the group's network icon
+					}
+
+					return icons.FlagTitleKey(s.Net.IPCountry)
 				},
 			},
 			{

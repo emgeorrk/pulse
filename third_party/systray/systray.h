@@ -16,7 +16,7 @@ void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool templat
 void setMenuItemEmojiIcon(int menuId, char* emoji);
 void clearMenuItemIcon(int menuId);
 void setTitle(char* title);
-void registerTitleIcon(char* key, const char* iconBytes, int length);
+void registerTitleIcon(char* key, const char* iconBytes, int length, bool color);
 void setTitleParts(char* encoded);
 void setTooltip(char* tooltip);
 void setRemovalAllowed(bool allowed);
