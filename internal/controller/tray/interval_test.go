@@ -47,12 +47,3 @@ func TestParseInterval(t *testing.T) {
 		})
 	}
 }
-
-// The row title pins the prefix, the seconds format, and the dialog ellipsis.
-func TestIntervalTitle(t *testing.T) {
-	t.Parallel()
-
-	if got, want := intervalTitle(2), "Update interval: 2 s…"; got != want {
-		t.Errorf("intervalTitle(2) = %q, want %q", got, want)
-	}
-}

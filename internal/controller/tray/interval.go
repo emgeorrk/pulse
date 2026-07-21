@@ -11,13 +11,8 @@ import (
 	"github.com/emgeorrk/pulse/config"
 )
 
+// intervalPrefix labels the inline interval editor row in Settings.
 const intervalPrefix = "Update interval"
-
-// intervalTitle renders the flat Settings row: "Update interval: 2 s…".
-// The trailing ellipsis is the macOS cue that clicking opens a dialog.
-func intervalTitle(sec int) string {
-	return settingTitle(intervalPrefix, formatSeconds(sec)) + "…"
-}
 
 // parseInterval parses the typed input: non-numeric or empty is rejected;
 // numeric input is clamped into [MinIntervalSeconds, MaxIntervalSeconds].
@@ -37,41 +32,33 @@ func parseInterval(s string) (int, bool) {
 	}
 }
 
-// addIntervalPrompt builds the "Update interval: N s…" row under parent.
-// It is a flat leaf without KeepMenuOpen: the menu must close so the modal
-// input dialog can take over the main thread.
-func (t *Tray) addIntervalPrompt(parent *systray.MenuItem, cfg config.Config) {
-	item := parent.AddSubMenuItem(intervalTitle(cfg.IntervalSec), "")
-
-	go t.watchIntervalPrompt(item)
-}
-
-// watchIntervalPrompt reacts to clicks on the interval row. No re-entrancy
-// guard is needed: systray delivers clicks with a non-blocking send (dropped
-// while promptInterval blocks), and runModal occupies the Cocoa main thread,
-// so the menu cannot even open while the dialog is up.
-func (t *Tray) watchIntervalPrompt(item *systray.MenuItem) {
-	for range item.ClickedCh {
-		t.promptInterval(item)
-	}
-}
-
-func (t *Tray) promptInterval(item *systray.MenuItem) {
-	current := t.store.Get().IntervalSec
-	message := fmt.Sprintf("Seconds between updates (%d–%d).",
+// addIntervalEditor builds the "Update interval [N] s" Settings row whose
+// value is typed directly in the menu: the row carries an inline text field,
+// submitted on Return or when the field loses focus (menu closing included).
+func (t *Tray) addIntervalEditor(parent *systray.MenuItem, cfg config.Config) {
+	tip := fmt.Sprintf("Seconds between updates (%d–%d)",
 		config.MinIntervalSeconds, config.MaxIntervalSeconds)
+	item := parent.AddSubMenuItem(intervalPrefix, tip)
+	item.EnableInlineEdit(strconv.Itoa(cfg.IntervalSec), "s")
 
-	entered, ok := promptString(intervalPrefix, message, strconv.Itoa(current))
-	if !ok {
-		return // Cancel keeps the old value
+	go t.watchIntervalEdits(item)
+}
+
+// watchIntervalEdits applies each submitted value and echoes the accepted
+// (clamped) one back into the field; garbage input reverts the field to the
+// stored value. Submissions racing a slow apply are dropped by the buffered
+// channel — the same policy systray uses for clicks.
+func (t *Tray) watchIntervalEdits(item *systray.MenuItem) {
+	for text := range item.EditedCh {
+		v, ok := parseInterval(text)
+		if !ok {
+			item.SetInlineEditText(strconv.Itoa(t.store.Get().IntervalSec))
+
+			continue
+		}
+
+		t.updateConfig(func(c *config.Config) { c.IntervalSec = v })
+		item.SetInlineEditText(strconv.Itoa(v))
+		t.refresh()
 	}
-
-	v, ok := parseInterval(entered)
-	if !ok {
-		return // garbage input is a no-op, same as Cancel
-	}
-
-	t.updateConfig(func(c *config.Config) { c.IntervalSec = v })
-	item.SetTitle(intervalTitle(v))
-	t.refresh()
 }

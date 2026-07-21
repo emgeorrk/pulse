@@ -120,7 +120,7 @@ linters:
       # blank lines conflict with gofumpt/whitespace at unrelated statements.
       - linters:
           - nlreturn
-        path: (internal/sensors/.*|internal/controller/tray/dialog)_darwin\.go
+        path: internal/sensors/.*_darwin\.go
     paths:
       - bin/
       - third_party/

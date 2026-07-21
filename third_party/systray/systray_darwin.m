@@ -246,6 +246,174 @@ static const CGFloat kPulseIconGap = 6;
 
 @end
 
+// PATCH(pulse): view-backed menu row with an inline editable text field, so a
+// value can be typed directly inside the open menu (like the search field in
+// Apple's Help menu). The row is not a button: no hover highlight, no click
+// action — only the field is interactive. Both Return and losing focus
+// (including the menu closing) submit the text to Go through
+// systray_menu_item_edited; Go echoes the accepted value back through
+// set_menu_item_edit_field.
+static const CGFloat kPulseEditItemHeight = 26;
+static const CGFloat kPulseEditFieldWidth = 48;
+static const CGFloat kPulseEditFieldHeight = 21;
+static const CGFloat kPulseEditFieldGap = 8;
+static const CGFloat kPulseEditSuffixGap = 5;
+
+@interface PulseEditItemView : NSView <NSTextFieldDelegate>
+- (instancetype)initWithMenuItem:(NSMenuItem *)theItem;
+- (void)setFieldText:(NSString *)text suffix:(NSString *)theSuffix;
+- (void)sync;
+@end
+
+@implementation PulseEditItemView
+{
+  __weak NSMenuItem *item;
+  NSTextField *label;
+  NSTextField *field;
+  NSTextField *suffix;
+  // The last text the Go side agrees on: set both when Go fills the field and
+  // when a submission is delivered. Submitting is skipped while the field
+  // still shows this text, which collapses the Return double-fire (action +
+  // end-of-editing) and makes plain focus loss without edits a no-op, while a
+  // re-typed rejected value still differs from the reverted text and goes
+  // through again.
+  NSString *lastText;
+}
+
+- (instancetype)initWithMenuItem:(NSMenuItem *)theItem {
+  self = [super initWithFrame:NSMakeRect(0, 0, 100, kPulseEditItemHeight)];
+  if (!self) {
+    return nil;
+  }
+  item = theItem;
+  self.autoresizingMask = NSViewWidthSizable;
+
+  label = [NSTextField labelWithString:@""];
+  label.font = [NSFont menuFontOfSize:13];
+  label.lineBreakMode = NSLineBreakByClipping;
+  label.maximumNumberOfLines = 1;
+  [self addSubview:label];
+
+  field = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, kPulseEditFieldWidth, kPulseEditFieldHeight)];
+  field.font = [NSFont menuFontOfSize:13];
+  field.bezelStyle = NSTextFieldRoundedBezel;
+  field.alignment = NSTextAlignmentCenter;
+  field.usesSingleLineMode = YES;
+  field.lineBreakMode = NSLineBreakByClipping;
+  field.maximumNumberOfLines = 1;
+  field.delegate = self;
+  field.target = self;
+  field.action = @selector(commit:);
+  [self addSubview:field];
+
+  suffix = [NSTextField labelWithString:@""];
+  suffix.font = [NSFont menuFontOfSize:13];
+  suffix.textColor = [NSColor secondaryLabelColor];
+  [self addSubview:suffix];
+
+  return self;
+}
+
+- (void)setFieldText:(NSString *)text suffix:(NSString *)theSuffix {
+  field.stringValue = text;
+  suffix.stringValue = theSuffix;
+  lastText = [text copy];
+}
+
+- (void)sync {
+  NSMenuItem *it = item;
+  if (!it) {
+    return;
+  }
+  label.stringValue = it.title;
+  [label sizeToFit];
+  NSRect lf = label.frame;
+  lf.origin.x = kPulseTextX;
+  lf.origin.y = floor((kPulseEditItemHeight - NSHeight(lf)) / 2);
+  label.frame = lf;
+
+  NSRect ff = field.frame;
+  ff.origin.x = NSMaxX(lf) + kPulseEditFieldGap;
+  ff.origin.y = floor((kPulseEditItemHeight - NSHeight(ff)) / 2);
+  field.frame = ff;
+
+  [suffix sizeToFit];
+  NSRect sf = suffix.frame;
+  sf.origin.x = NSMaxX(ff) + kPulseEditSuffixGap;
+  sf.origin.y = floor((kPulseEditItemHeight - NSHeight(sf)) / 2);
+  suffix.frame = sf;
+  suffix.hidden = (suffix.stringValue.length == 0);
+
+  field.enabled = it.enabled;
+  self.alphaValue = it.enabled ? 1.0 : 0.4;
+
+  // Mirror the tooltip like PulseKeepOpenItemView does (view-backed items
+  // ignore NSMenuItem.toolTip); guarded against redundant resets.
+  NSString *tip = it.toolTip.length ? it.toolTip : nil;
+  if (tip != self.toolTip && ![tip isEqualToString:self.toolTip]) {
+    self.toolTip = tip;
+  }
+
+  // Grow-only, same as the keep-open rows.
+  CGFloat needed = NSMaxX(sf) + kPulseTrailingPad;
+  if (needed > NSWidth(self.frame)) {
+    NSRect f = self.frame;
+    f.size.width = needed;
+    self.frame = f;
+  }
+}
+
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (self.window == nil) {
+    return;
+  }
+  // Menus don't reliably route click-to-edit into a text field, so focus the
+  // field as soon as the row appears (the Help menu's search field does the
+  // same); becoming first responder selects the text, so typing replaces it.
+  // Deferred: the menu window isn't ready for a responder change yet while
+  // the view is still being attached.
+  NSTextField *f = field;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [f.window makeFirstResponder:f];
+  });
+}
+
+- (void)commit:(id)sender {
+  [self submit];
+}
+
+// NSTextFieldDelegate: fires on Return and whenever the field loses focus,
+// including the menu closing over edited text.
+- (void)controlTextDidEndEditing:(NSNotification *)notification {
+  [self submit];
+}
+
+// NSTextFieldDelegate: Esc reverts the field instead of committing through
+// the focus-loss path; returning NO leaves the key event to the menu, which
+// closes as usual.
+- (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector {
+  if (commandSelector == @selector(cancelOperation:)) {
+    field.stringValue = lastText ?: @"";
+  }
+  return NO;
+}
+
+- (void)submit {
+  NSMenuItem *it = item;
+  if (!it) {
+    return;
+  }
+  NSString *text = field.stringValue;
+  if ([text isEqualToString:lastText]) {
+    return;
+  }
+  lastText = [text copy];
+  systray_menu_item_edited([(NSNumber *)it.representedObject intValue], (char *)text.UTF8String);
+}
+
+@end
+
 @interface SystrayAppDelegate: NSObject <NSApplicationDelegate, NSMenuDelegate>
   - (void) add_or_update_menu_item:(MenuItem*) item;
   - (IBAction)menuHandler:(id)sender;
@@ -572,6 +740,8 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
   // PATCH(pulse): view-backed rows draw title/state themselves.
   if ([menuItem.view isKindOfClass:[PulseKeepOpenItemView class]]) {
     [(PulseKeepOpenItemView *)menuItem.view sync];
+  } else if ([menuItem.view isKindOfClass:[PulseEditItemView class]]) {
+    [(PulseEditItemView *)menuItem.view sync];
   }
 }
 
@@ -585,6 +755,27 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
   }
   PulseKeepOpenItemView *view = [[PulseKeepOpenItemView alloc] initWithMenuItem:menuItem];
   menuItem.view = view;
+  [view sync];
+}
+
+// PATCH(pulse): attach (first call) or refill (later calls) the inline edit
+// field on a row — args are @[menuId, fieldText, suffix]. See PulseEditItemView.
+- (void)set_menu_item_edit_field:(NSArray *)args
+{
+  NSMenuItem *menuItem = find_menu_item(menu, args[0]);
+  if (menuItem == NULL || menuItem.hasSubmenu) {
+    return;
+  }
+  PulseEditItemView *view = nil;
+  if (menuItem.view == nil) {
+    view = [[PulseEditItemView alloc] initWithMenuItem:menuItem];
+    menuItem.view = view;
+  } else if ([menuItem.view isKindOfClass:[PulseEditItemView class]]) {
+    view = (PulseEditItemView *)menuItem.view;
+  } else {
+    return; // some other view owns the row
+  }
+  [view setFieldText:args[1] suffix:args[2]];
   [view sync];
 }
 
@@ -879,6 +1070,18 @@ void add_separator(int menuId, int parentId) {
 void set_menu_item_keep_open(int menuId) {
   NSNumber *mId = [NSNumber numberWithInt:menuId];
   runInMainThread(@selector(set_menu_item_keep_open:), (id)mId);
+}
+
+// PATCH(pulse): see PulseEditItemView.
+void set_menu_item_edit_field(int menuId, char* text, char* suffix) {
+  NSString* nsText = [[NSString alloc] initWithCString:text
+                                              encoding:NSUTF8StringEncoding];
+  NSString* nsSuffix = [[NSString alloc] initWithCString:suffix
+                                                encoding:NSUTF8StringEncoding];
+  free(text);
+  free(suffix);
+  NSArray *args = @[[NSNumber numberWithInt:menuId], nsText, nsSuffix];
+  runInMainThread(@selector(set_menu_item_edit_field:), (id)args);
 }
 
 void hide_menu_item(int menuId) {

@@ -204,6 +204,11 @@ func keepMenuOpen(item *MenuItem) {
 	C.set_menu_item_keep_open(C.int(item.id))
 }
 
+// PATCH(pulse): attach (or refill) the inline editable text field on a row.
+func setInlineEditField(item *MenuItem, text, suffix string) {
+	C.set_menu_item_edit_field(C.int(item.id), C.CString(text), C.CString(suffix))
+}
+
 func hideMenuItem(item *MenuItem) {
 	C.hide_menu_item(
 		C.int(item.id),
@@ -259,6 +264,13 @@ func systray_on_exit() {
 //export systray_menu_item_selected
 func systray_menu_item_selected(cID C.int) {
 	systrayMenuItemSelected(uint32(cID))
+}
+
+// PATCH(pulse): inline edit field submission.
+//
+//export systray_menu_item_edited
+func systray_menu_item_edited(cID C.int, text *C.char) {
+	systrayMenuItemEdited(uint32(cID), C.GoString(text))
 }
 
 //export systray_menu_will_open

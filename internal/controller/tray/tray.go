@@ -8,7 +8,6 @@ package tray
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -221,13 +220,13 @@ func setTemplateIcon(item *systray.MenuItem, style config.VisualStyle, key strin
 
 // The Settings dropdown: every multi-choice setting is a submenu whose
 // parent row carries the current value ("Temperature: °C"), the update
-// interval is a flat prompt row opening an input dialog, the boolean
+// interval is a flat row with an inline editable text field, the boolean
 // toggles stay flat, and separators split the choice / toggle / login blocks.
 func (t *Tray) buildSettings(cfg config.Config) {
 	s := systray.AddMenuItem("Settings", "")
 	t.settings = s
 
-	t.addIntervalPrompt(s, cfg)
+	t.addIntervalEditor(s, cfg)
 	t.addRadioGroup(s, "Temperature", tempOptions(cfg))
 	t.addRadioGroup(s, "Memory units", memoryOptions(cfg))
 	t.addRadioGroup(s, iconsLabel, iconOptions(cfg))
@@ -659,10 +658,6 @@ func setChecked(item *systray.MenuItem, on bool) {
 	} else {
 		item.Uncheck()
 	}
-}
-
-func formatSeconds(sec int) string {
-	return fmt.Sprintf("%d s", sec)
 }
 
 // prettyModel strips the parentheses and the duplicate chip name from
