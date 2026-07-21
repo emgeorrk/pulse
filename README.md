@@ -19,7 +19,7 @@ scratch for the Mac.
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Pulse menu bar dropdown showing CPU, memory, temperature, and other live metrics" width="340">
+  <img src="docs/screenshot.png" alt="Pulse menu bar dropdown showing CPU, memory, temperature, and other live metrics" width="700">
 </p>
 
 ## How it works
