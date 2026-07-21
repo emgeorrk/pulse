@@ -1102,6 +1102,9 @@ func addSeparator(id uint32, parent uint32) {
 // PATCH(pulse): keep-open rows are macOS-only; no-op here.
 func keepMenuOpen(item *MenuItem) {}
 
+// PATCH(pulse): inline edit fields are macOS-only; no-op here.
+func setInlineEditField(item *MenuItem, text, suffix string) {}
+
 func hideMenuItem(item *MenuItem) {
 	err := wt.hideMenuItem(uint32(item.id), item.parentId())
 	if err != nil {
