@@ -96,6 +96,42 @@ func TestGroupAggregates(t *testing.T) {
 	}
 }
 
+// The Network header shows a single value — the download rate, like Vitals
+// (upstream promotes only the rx total to the group label; tx stays a
+// submenu row).
+func TestNetworkAggregate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		snap entity.Snapshot
+		want string
+	}{
+		{name: "no net source", snap: entity.Snapshot{}, want: "—"},
+		{name: "sample frame", snap: sampleSnapshot(), want: "↓1.2K/s"},
+		{name: "idle frame", snap: fallbackSnapshot(), want: "↓0B/s"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, g := range buildGroups(entity.HWInfo{NumCores: 2}, fullCaps()) {
+				if g.label != "Network" {
+					continue
+				}
+
+				if got := g.aggregate(tt.snap, config.Config{}); got != tt.want {
+					t.Errorf("aggregate = %q, want %q", got, tt.want)
+				}
+
+				return
+			}
+
+			t.Fatal("Network group not found")
+		})
+	}
+}
+
 // The bar prefix matrix: text mode uses the tag, emoji mode keeps the
 // qualifier next to the group emoji, gnome mode swaps to icon keys and
 // drops the qualifier when the icon itself is metric-specific.

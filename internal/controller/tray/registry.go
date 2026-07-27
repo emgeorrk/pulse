@@ -892,7 +892,7 @@ func netGroup(ifaces []string) group { //nolint:cyclop,funlen,gocognit,gocyclo /
 				return "—"
 			}
 
-			return "↓" + format.SpeedShort(s.Net.Down, c.HigherPrecision) + " ↑" + format.SpeedShort(s.Net.Up, c.HigherPrecision)
+			return "↓" + format.SpeedShort(s.Net.Down, c.HigherPrecision)
 		},
 		metrics: []metric{
 			{
