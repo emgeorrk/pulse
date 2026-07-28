@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultIntervalSeconds = 2
+	defaultIntervalSeconds = 3
 	directoryMode          = 0o755
 	privateFileMode        = 0o600
 )
@@ -79,8 +79,10 @@ func defaults() Config {
 		DecimalBytes:  false,
 		Pinned:        []entity.MetricID{"cpu.total", "mem.usage", "temp.hottest"},
 		ShowSparkline: false,
-		VisualStyle:   VisualEmoji,
+		VisualStyle:   VisualGnome,
 		BarLabels:     BarVisual,
+		ShowPublicIP:  true,
+		FixedWidth:    true,
 	}
 }
 
@@ -145,7 +147,7 @@ func Load(path string) *Store {
 	switch c.VisualStyle {
 	case VisualEmoji, VisualGnome, VisualClassic: // known styles are kept as-is
 	default:
-		c.VisualStyle = VisualEmoji // unknown/blank falls back to the default pack
+		c.VisualStyle = VisualGnome // unknown/blank falls back to the default pack
 	}
 
 	if c.BarLabels != BarText {

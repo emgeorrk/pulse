@@ -77,14 +77,14 @@ func TestLoad(t *testing.T) {
 	}{
 		{
 			name:         "missing file gives defaults",
-			wantStyle:    VisualEmoji,
+			wantStyle:    VisualGnome,
 			wantBar:      BarVisual,
 			wantDefaults: true,
 		},
 		{
 			name:         "corrupt file gives defaults",
 			content:      "{not json",
-			wantStyle:    VisualEmoji,
+			wantStyle:    VisualGnome,
 			wantBar:      BarVisual,
 			wantDefaults: true,
 		},
@@ -93,7 +93,7 @@ func TestLoad(t *testing.T) {
 			// normalize the style fields instead of leaking unknown values into the UI.
 			name:      "junk style values normalized",
 			content:   `{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`,
-			wantStyle: VisualEmoji,
+			wantStyle: VisualGnome,
 			wantBar:   BarVisual,
 		},
 		{
@@ -122,8 +122,13 @@ func TestLoad(t *testing.T) {
 
 			c := Load(path).Get()
 
-			if c.IntervalSec != 2 || c.TempUnit != Celsius {
-				t.Errorf("interval/unit = %d/%s, want 2/%s", c.IntervalSec, c.TempUnit, Celsius)
+			wantInterval := 2 // written into the file by the content cases
+			if tt.wantDefaults {
+				wantInterval = defaultIntervalSeconds
+			}
+
+			if c.IntervalSec != wantInterval || c.TempUnit != Celsius {
+				t.Errorf("interval/unit = %d/%s, want %d/%s", c.IntervalSec, c.TempUnit, wantInterval, Celsius)
 			}
 
 			if c.VisualStyle != tt.wantStyle || c.BarLabels != tt.wantBar {
@@ -143,25 +148,25 @@ func TestLoad(t *testing.T) {
 	}
 }
 
-// The newer boolean toggles must default to off and survive a
-// persist-and-reload round trip; a single scenario, so no table here.
+// The newer boolean toggles must start with their documented defaults and
+// survive a persist-and-reload round trip; a single scenario, so no table here.
 func TestLoadNewToggles(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "config.json")
 
 	s := Load(path)
-	if c := s.Get(); c.HigherPrecision || c.ShowPublicIP || c.FixedWidth {
-		t.Errorf("defaults: HigherPrecision=%t ShowPublicIP=%t FixedWidth=%t, want all false", c.HigherPrecision, c.ShowPublicIP, c.FixedWidth)
+	if c := s.Get(); c.HigherPrecision || !c.ShowPublicIP || !c.FixedWidth {
+		t.Errorf("defaults: HigherPrecision=%t ShowPublicIP=%t FixedWidth=%t, want false/true/true", c.HigherPrecision, c.ShowPublicIP, c.FixedWidth)
 	}
 
-	if err := s.Update(func(c *Config) { c.HigherPrecision = true; c.ShowPublicIP = true; c.FixedWidth = true }); err != nil {
+	if err := s.Update(func(c *Config) { c.HigherPrecision = true; c.ShowPublicIP = false; c.FixedWidth = false }); err != nil {
 		t.Fatal(err)
 	}
 
 	c := Load(path).Get()
-	if !c.HigherPrecision || !c.ShowPublicIP || !c.FixedWidth {
-		t.Errorf("after reload: HigherPrecision=%t ShowPublicIP=%t FixedWidth=%t, want all true", c.HigherPrecision, c.ShowPublicIP, c.FixedWidth)
+	if !c.HigherPrecision || c.ShowPublicIP || c.FixedWidth {
+		t.Errorf("after reload: HigherPrecision=%t ShowPublicIP=%t FixedWidth=%t, want true/false/false", c.HigherPrecision, c.ShowPublicIP, c.FixedWidth)
 	}
 }
 
