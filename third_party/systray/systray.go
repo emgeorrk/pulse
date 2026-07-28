@@ -43,6 +43,11 @@ type MenuItem struct {
 	// ClickedCh is the channel which will be notified when the menu item is clicked
 	ClickedCh chan struct{}
 
+	// EditedCh receives the text of the item's inline edit field each time it
+	// is submitted (Return or focus loss). It is nil until EnableInlineEdit is
+	// called. PATCH(pulse).
+	EditedCh chan string
+
 	// id uniquely identify a menu item, not supposed to be modified
 	id uint32
 	// title is the text shown on menu item
@@ -57,6 +62,8 @@ type MenuItem struct {
 	isCheckable bool
 	// parent item, for sub menus
 	parent *MenuItem
+	// editSuffix is the static text drawn after the inline edit field. PATCH(pulse).
+	editSuffix string
 }
 
 func (item *MenuItem) String() string {
@@ -252,6 +259,26 @@ func (item *MenuItem) KeepMenuOpen() {
 	keepMenuOpen(item)
 }
 
+// EnableInlineEdit replaces the item's row with its title followed by an
+// editable text field holding text and a static suffix after the field
+// (macOS only; no-op elsewhere). Submitted text arrives on EditedCh; echo the
+// accepted value back with SetInlineEditText. PATCH(pulse).
+func (item *MenuItem) EnableInlineEdit(text, suffix string) {
+	if item.EditedCh == nil {
+		// Buffered so a submission arriving between watcher reads is kept;
+		// further ones are dropped like clicks are.
+		item.EditedCh = make(chan string, 1)
+	}
+	item.editSuffix = suffix
+	setInlineEditField(item, text, suffix)
+}
+
+// SetInlineEditText replaces the inline edit field's content — used to echo
+// the accepted (e.g. clamped) value after an EditedCh submission. PATCH(pulse).
+func (item *MenuItem) SetInlineEditText(text string) {
+	setInlineEditField(item, text, item.editSuffix)
+}
+
 // Hide hides a menu item
 func (item *MenuItem) Hide() {
 	hideMenuItem(item)
@@ -332,6 +359,21 @@ func systrayMenuItemSelected(id uint32) {
 	select {
 	case item.ClickedCh <- struct{}{}:
 	// in case no one waiting for the channel
+	default:
+	}
+}
+
+// PATCH(pulse): inline edit field submission (see EnableInlineEdit).
+func systrayMenuItemEdited(id uint32, text string) {
+	menuItemsLock.RLock()
+	item, ok := menuItems[id]
+	menuItemsLock.RUnlock()
+	if !ok || item.EditedCh == nil {
+		return
+	}
+	select {
+	case item.EditedCh <- text:
+	// drop when the watcher hasn't drained the previous submission
 	default:
 	}
 }

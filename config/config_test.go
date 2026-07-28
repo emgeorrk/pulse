@@ -20,6 +20,8 @@ func TestInterval(t *testing.T) {
 		{name: "one second", sec: 1, want: time.Second},
 		{name: "zero falls back to default", sec: 0, want: defaultIntervalSeconds * time.Second},
 		{name: "negative falls back to default", sec: -3, want: defaultIntervalSeconds * time.Second},
+		{name: "max kept", sec: MaxIntervalSeconds, want: MaxIntervalSeconds * time.Second},
+		{name: "above max clamps to max", sec: MaxIntervalSeconds + 1, want: MaxIntervalSeconds * time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,12 +75,14 @@ func TestLoad(t *testing.T) {
 		content      string // written to the config file; empty means the file is missing
 		wantStyle    VisualStyle
 		wantBar      BarLabelStyle
+		wantInterval int
 		wantDefaults bool // expect full defaults(): sparkline off, default pins
 	}{
 		{
 			name:         "missing file gives defaults",
 			wantStyle:    VisualEmoji,
 			wantBar:      BarVisual,
+			wantInterval: defaultIntervalSeconds,
 			wantDefaults: true,
 		},
 		{
@@ -86,27 +90,40 @@ func TestLoad(t *testing.T) {
 			content:      "{not json",
 			wantStyle:    VisualEmoji,
 			wantBar:      BarVisual,
+			wantInterval: defaultIntervalSeconds,
 			wantDefaults: true,
 		},
 		{
 			// A config written by an older version (or hand-edited to junk) must
 			// normalize the style fields instead of leaking unknown values into the UI.
-			name:      "junk style values normalized",
-			content:   `{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`,
-			wantStyle: VisualEmoji,
-			wantBar:   BarVisual,
+			name:         "junk style values normalized",
+			content:      `{"interval_sec":2,"visual_style":"neon","bar_labels":"dancing"}`,
+			wantStyle:    VisualEmoji,
+			wantBar:      BarVisual,
+			wantInterval: 2,
 		},
 		{
-			name:      "valid style values kept",
-			content:   `{"interval_sec":2,"visual_style":"emoji","bar_labels":"text"}`,
-			wantStyle: VisualEmoji,
-			wantBar:   BarText,
+			name:         "valid style values kept",
+			content:      `{"interval_sec":2,"visual_style":"emoji","bar_labels":"text"}`,
+			wantStyle:    VisualEmoji,
+			wantBar:      BarText,
+			wantInterval: 2,
 		},
 		{
-			name:      "classic style kept",
-			content:   `{"interval_sec":2,"visual_style":"classic","bar_labels":"visual"}`,
-			wantStyle: VisualClassic,
-			wantBar:   BarVisual,
+			name:         "classic style kept",
+			content:      `{"interval_sec":2,"visual_style":"classic","bar_labels":"visual"}`,
+			wantStyle:    VisualClassic,
+			wantBar:      BarVisual,
+			wantInterval: 2,
+		},
+		{
+			// Hand-edited intervals beyond the stepper max clamp on load so the
+			// menu title never shows a value the sampler won't honor.
+			name:         "interval above max clamps",
+			content:      `{"interval_sec":120,"visual_style":"emoji","bar_labels":"text"}`,
+			wantStyle:    VisualEmoji,
+			wantBar:      BarText,
+			wantInterval: MaxIntervalSeconds,
 		},
 	}
 	for _, tt := range tests {
@@ -122,8 +139,8 @@ func TestLoad(t *testing.T) {
 
 			c := Load(path).Get()
 
-			if c.IntervalSec != 2 || c.TempUnit != Celsius {
-				t.Errorf("interval/unit = %d/%s, want 2/%s", c.IntervalSec, c.TempUnit, Celsius)
+			if c.IntervalSec != tt.wantInterval || c.TempUnit != Celsius {
+				t.Errorf("interval/unit = %d/%s, want %d/%s", c.IntervalSec, c.TempUnit, tt.wantInterval, Celsius)
 			}
 
 			if c.VisualStyle != tt.wantStyle || c.BarLabels != tt.wantBar {

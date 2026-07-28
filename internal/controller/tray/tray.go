@@ -8,7 +8,6 @@ package tray
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -223,13 +222,14 @@ func setTemplateIcon(item *systray.MenuItem, style config.VisualStyle, key strin
 }
 
 // The Settings dropdown: every multi-choice setting is a submenu whose
-// parent row carries the current value ("Temperature: °C"), the boolean
+// parent row carries the current value ("Temperature: °C"), the update
+// interval is a flat row with an inline editable text field, the boolean
 // toggles stay flat, and separators split the choice / toggle / login blocks.
 func (t *Tray) buildSettings(cfg config.Config) {
 	s := systray.AddMenuItem("Settings", "")
 	t.settings = s
 
-	t.addRadioGroup(s, "Update interval", intervalOptions(cfg))
+	t.addIntervalEditor(s, cfg)
 	t.addRadioGroup(s, "Temperature", tempOptions(cfg))
 	t.addRadioGroup(s, "Memory units", memoryOptions(cfg))
 	t.addRadioGroup(s, iconsLabel, iconOptions(cfg))
@@ -314,21 +314,6 @@ func (t *Tray) watchRadioChoice(head *systray.MenuItem, prefix string, items []*
 		head.SetTitle(settingTitle(prefix, opt.label))
 		t.refresh()
 	}
-}
-
-func intervalOptions(cfg config.Config) []radioOption {
-	intervals := []int{1, 2, 3, 5}
-	opts := make([]radioOption, 0, len(intervals))
-
-	for _, sec := range intervals {
-		opts = append(opts, radioOption{
-			label:   formatSeconds(sec),
-			checked: cfg.IntervalSec == sec,
-			apply:   func(c *config.Config) { c.IntervalSec = sec },
-		})
-	}
-
-	return opts
 }
 
 func tempOptions(cfg config.Config) []radioOption {
@@ -676,10 +661,6 @@ func setChecked(item *systray.MenuItem, on bool) {
 	} else {
 		item.Uncheck()
 	}
-}
-
-func formatSeconds(sec int) string {
-	return fmt.Sprintf("%d s", sec)
 }
 
 // prettyModel strips the parentheses and the duplicate chip name from

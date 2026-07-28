@@ -367,6 +367,9 @@ func removeMenuItem(item *MenuItem) {
 // PATCH(pulse): keep-open rows are macOS-only; no-op here.
 func keepMenuOpen(item *MenuItem) {}
 
+// PATCH(pulse): inline edit fields are macOS-only; no-op here.
+func setInlineEditField(item *MenuItem, text, suffix string) {}
+
 func hideMenuItem(item *MenuItem) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
