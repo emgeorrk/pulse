@@ -94,6 +94,8 @@ Everything is in the dropdown menu:
 - **Data units** — GB or GiB
 - **Menu bar graph** — show or hide the little CPU sparkline
 - **Launch at login**
+- **Update notification** — when a stable release is available, an
+  **Update available** link appears in the main menu
 
 ## Questions
 

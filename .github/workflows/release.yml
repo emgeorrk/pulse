@@ -119,8 +119,7 @@ jobs:
              open /Applications/Pulse.app
              ```
 
-          Pulse looks in your menu bar — it has no Dock icon. Quit via "Quit Pulse"
-          in its dropdown.
+          Pulse looks in your menu bar — it has no Dock icon. Quit via "Quit Pulse" in its dropdown.
 
           > The prebuilt `.zip` is **ad-hoc signed, not notarized** (no paid Apple
           > Developer account), so a downloaded copy is quarantined and needs the

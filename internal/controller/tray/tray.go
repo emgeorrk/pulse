@@ -19,8 +19,16 @@ import (
 	"github.com/emgeorrk/pulse/internal/autostart"
 	"github.com/emgeorrk/pulse/internal/controller/tray/icons"
 	"github.com/emgeorrk/pulse/internal/entity"
+	"github.com/emgeorrk/pulse/internal/updatecheck"
 	"github.com/emgeorrk/pulse/pkg/format"
 )
+
+type updateMenuItem interface {
+	SetTitle(string)
+	SetTooltip(string)
+	Hide()
+	Show()
+}
 
 type groupUI struct {
 	group
@@ -38,8 +46,14 @@ type Tray struct { //nolint:govet // Field order follows UI lifecycle and state 
 	settings     *systray.MenuItem
 	quit         *systray.MenuItem
 	ipRow        *systray.MenuItem
+	updateRow    updateMenuItem
+	updateIcon   *systray.MenuItem
+	updateClicks <-chan struct{}
+	updates      updatecheck.Source
+	openURL      func(string)
 	appliedStyle config.VisualStyle
 	ipFlagCC     string // country of the flag on ipRow ("" = none), lowercase
+	updateURL    string
 	groups       []groupUI
 	hw           entity.HWInfo
 	mu           sync.Mutex
@@ -47,8 +61,11 @@ type Tray struct { //nolint:govet // Field order follows UI lifecycle and state 
 	loading      bool
 }
 
-func New(store *config.Store, hw entity.HWInfo, caps entity.Caps) *Tray {
-	t := &Tray{store: store, hw: hw, bar: map[entity.MetricID]metric{}, titleFlags: map[string]bool{}, loading: true}
+func New(store *config.Store, hw entity.HWInfo, caps entity.Caps, updates updatecheck.Source) *Tray {
+	t := &Tray{
+		store: store, hw: hw, updates: updates, openURL: openBrowser,
+		bar: map[entity.MetricID]metric{}, titleFlags: map[string]bool{}, loading: true,
+	}
 
 	groups := buildGroups(hw, caps)
 	for groupIndex := range groups {
@@ -75,6 +92,8 @@ func (t *Tray) Run(start func(ctx context.Context) <-chan entity.Snapshot) {
 		t.build()
 		go t.animate(ctx)
 		go t.consume(start(ctx))
+		go t.watchUpdates(ctx)
+		go t.watchUpdateClicks(ctx)
 	}, cancel)
 }
 
@@ -139,6 +158,8 @@ func (t *Tray) build() {
 
 	systray.AddSeparator()
 
+	t.buildUpdateItem()
+
 	t.quit = systray.AddMenuItem("Quit Pulse", "")
 	go func() {
 		<-t.quit.ClickedCh
@@ -146,6 +167,15 @@ func (t *Tray) build() {
 	}()
 
 	t.applyVisualStyle(cfg) // last: needs the Settings and Quit items built
+}
+
+func (t *Tray) buildUpdateItem() {
+	update := systray.AddMenuItem(updateAvailableTitle, updateTooltip)
+	update.Hide()
+
+	t.updateRow = update
+	t.updateIcon = update
+	t.updateClicks = update.ClickedCh
 }
 
 // headerTitle is the group header text plus the live aggregate; the group's
@@ -160,12 +190,13 @@ func (g *groupUI) headerTitle(aggregate string) string {
 	return title
 }
 
-// Emoji for the About, Activity Monitor, Settings and Quit items in the
-// emoji style; the groups carry their own emoji in the registry.
+// Emoji for the About, Activity Monitor, Settings, Update and Quit items in
+// the emoji style; the groups carry their own emoji in the registry.
 const (
 	sysEmoji      = "ℹ️"
 	actMonEmoji   = "📈"
 	settingsEmoji = "🛠️"
+	updateEmoji   = "⬇️"
 	quitEmoji     = "🚪"
 )
 
@@ -174,6 +205,12 @@ const (
 // the app itself is unaffected.
 func openActivityMonitor() {
 	_ = exec.CommandContext(context.Background(), "open", "-a", "Activity Monitor").Start() //nolint:errcheck // Best-effort launch, see above.
+}
+
+// openBrowser opens a release page in the user's default browser. Like
+// Activity Monitor, this is best effort because the tray has no error surface.
+func openBrowser(pageURL string) {
+	_ = exec.CommandContext(context.Background(), "open", pageURL).Start() //nolint:errcheck // Best-effort launch, see above.
 }
 
 // applyVisualStyle swaps the dropdown icons between the emoji and the icon
@@ -193,6 +230,7 @@ func (t *Tray) applyVisualStyle(cfg config.Config) {
 	applyItemStyle(t.sys, style, icons.About, sysEmoji)
 	applyItemStyle(t.actMon, style, icons.ActivityMonitor, actMonEmoji)
 	applyItemStyle(t.settings, style, icons.Settings, settingsEmoji)
+	applyItemStyle(t.updateIcon, style, icons.Update, updateEmoji)
 	applyItemStyle(t.quit, style, icons.Quit, quitEmoji)
 
 	t.mu.Lock()
@@ -254,6 +292,102 @@ func (t *Tray) buildSettings(cfg config.Config) {
 
 	login.KeepMenuOpen()
 	go t.watchLogin(login)
+}
+
+const (
+	updateCheckInterval  = 24 * time.Hour
+	updateAvailableTitle = "Update available"
+	updateTooltip        = "Open release page"
+)
+
+// watchUpdates checks immediately so the menu is current on launch, then once
+// a day for login-agent sessions that may run for weeks.
+func (t *Tray) watchUpdates(ctx context.Context) {
+	if t.updates == nil {
+		return
+	}
+
+	t.checkForUpdate(ctx)
+
+	ticker := time.NewTicker(updateCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.checkForUpdate(ctx)
+		}
+	}
+}
+
+// checkForUpdate intentionally preserves the current row on errors. A
+// temporary network or GitHub failure is not evidence that an update vanished.
+func (t *Tray) checkForUpdate(ctx context.Context) {
+	if t.updates == nil {
+		return
+	}
+
+	release, err := t.updates.Check(ctx)
+	if err != nil {
+		return
+	}
+
+	t.applyAvailableUpdate(release)
+}
+
+func (t *Tray) applyAvailableUpdate(release *updatecheck.Release) {
+	if t.updateRow == nil {
+		return
+	}
+
+	t.mu.Lock()
+	if release == nil {
+		t.updateURL = ""
+	} else {
+		t.updateURL = release.URL
+	}
+	t.mu.Unlock()
+
+	if release == nil {
+		t.updateRow.Hide()
+
+		return
+	}
+
+	t.updateRow.SetTitle(updateAvailableTitle)
+	t.updateRow.SetTooltip(updateTooltip)
+	t.updateRow.Show()
+}
+
+func (t *Tray) watchUpdateClicks(ctx context.Context) {
+	if t.updateClicks == nil {
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-t.updateClicks:
+			if !ok {
+				return
+			}
+
+			t.openAvailableUpdate()
+		}
+	}
+}
+
+func (t *Tray) openAvailableUpdate() {
+	t.mu.Lock()
+	pageURL := t.updateURL
+	t.mu.Unlock()
+
+	if pageURL != "" && t.openURL != nil {
+		t.openURL(pageURL)
+	}
 }
 
 // radioOption is one selectable leaf of a settings radio submenu.

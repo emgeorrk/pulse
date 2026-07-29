@@ -138,7 +138,7 @@ func TestNetworkAggregate(t *testing.T) {
 func TestBarPartStyles(t *testing.T) {
 	t.Parallel()
 
-	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps(), nil)
 	snap := sampleSnapshot()
 
 	text := config.Config{BarLabels: config.BarText}
@@ -216,7 +216,7 @@ func TestBarPartStyles(t *testing.T) {
 func TestPublicIPMenuText(t *testing.T) {
 	t.Parallel()
 
-	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps(), nil)
 
 	noIP := sampleSnapshot()
 	noIP.Net.PublicIP = ""
@@ -256,7 +256,7 @@ func TestPublicIPMenuText(t *testing.T) {
 func TestNewRegistersAllMetricsAsPinnable(t *testing.T) {
 	t.Parallel()
 
-	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps(), nil)
 
 	total := 0
 	for _, g := range tr.groups {
@@ -382,7 +382,7 @@ func TestHottestCoolestFriendlyName(t *testing.T) {
 		{name: "coolest maps gas gauge", id: "temp.coolest", want: "30°C (Battery)"},
 	}
 
-	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps())
+	tr := New(config.Load(""), entity.HWInfo{NumCores: 2}, fullCaps(), nil)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

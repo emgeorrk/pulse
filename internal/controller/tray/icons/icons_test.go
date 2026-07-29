@@ -2,6 +2,30 @@ package icons
 
 import "testing"
 
+func TestSharedMenuIcons(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{name: "settings", key: Settings},
+		{name: "about", key: About},
+		{name: "activity monitor", key: ActivityMonitor},
+		{name: "update", key: Update},
+		{name: "quit", key: Quit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if png := PNG("", tt.key); len(png) == 0 {
+				t.Errorf("PNG(%q) is empty", tt.key)
+			}
+		})
+	}
+}
+
 func TestFlagPNG(t *testing.T) {
 	t.Parallel()
 

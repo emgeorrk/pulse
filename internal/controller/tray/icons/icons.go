@@ -17,8 +17,9 @@ import (
 var pngs embed.FS
 
 // Icon keys. Each matches a png/<style>/<key>.png asset, except the shared
-// SF Symbols (Settings, About, ActivityMonitor, Quit), which live at the png
-// root because they only appear on menu items, never in the menu bar title.
+// SF Symbols (Settings, About, ActivityMonitor, Update, Quit), which live at
+// the png root because they only appear on menu items, never in the menu bar
+// title.
 const (
 	CPU             = "cpu"
 	Memory          = "memory"
@@ -35,6 +36,7 @@ const (
 	Settings        = "settings" // SF Symbol, shared across styles
 	About           = "about"    // SF Symbol, shared across styles
 	ActivityMonitor = "activity" // SF Symbol, shared across styles
+	Update          = "update"   // SF Symbol, shared across styles
 	Quit            = "quit"     // SF Symbol, shared across styles
 )
 
@@ -46,8 +48,8 @@ func ImageStyles() []string {
 }
 
 // MetricKeys returns every metric icon key (the shared menu-item symbols —
-// Settings, About, ActivityMonitor — are not per-style metrics and never
-// appear in the menu bar, so they are excluded).
+// Settings, About, ActivityMonitor, Update and Quit — are not per-style
+// metrics and never appear in the menu bar, so they are excluded).
 func MetricKeys() []string {
 	return []string{
 		CPU, Memory, Temperature, Fan, Power,
@@ -98,7 +100,7 @@ func PNG(style, key string) []byte {
 	path := "png/" + style + "/" + key + ".png"
 
 	switch key {
-	case Settings, About, ActivityMonitor, Quit:
+	case Settings, About, ActivityMonitor, Update, Quit:
 		path = "png/" + key + ".png"
 	}
 
