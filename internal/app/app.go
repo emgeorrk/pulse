@@ -16,6 +16,7 @@ import (
 	"github.com/emgeorrk/pulse/internal/controller/tray"
 	"github.com/emgeorrk/pulse/internal/entity"
 	"github.com/emgeorrk/pulse/internal/sensors"
+	"github.com/emgeorrk/pulse/internal/updatecheck"
 	"github.com/emgeorrk/pulse/internal/usecase"
 	"github.com/emgeorrk/pulse/pkg/format"
 	"github.com/emgeorrk/pulse/pkg/pprof"
@@ -162,7 +163,12 @@ func Run() error {
 
 	mon := usecase.NewMonitor(&src, store)
 
-	tray.New(store, hw, caps).Run(func(ctx context.Context) <-chan entity.Snapshot {
+	var updates updatecheck.Source
+	if version, versionErr := updatecheck.CurrentVersion(); versionErr == nil {
+		updates = updatecheck.New(version)
+	}
+
+	tray.New(store, hw, caps, updates).Run(func(ctx context.Context) <-chan entity.Snapshot {
 		return mon.Start(ctx)
 	})
 

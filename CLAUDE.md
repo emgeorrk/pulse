@@ -47,6 +47,7 @@ cmd/pulse (main, -once flag)
     → internal/sensors  data sources (repo layer): Mach, getifaddrs, IOKit, SMC, HID, IOReport
     → internal/usecase  sampling loop + metric math (counter deltas, aggregates)
     → internal/controller/tray  systray UI + the metric registry
+    → internal/updatecheck  installed bundle version + latest stable GitHub release
 internal/entity  domain types (no deps): Snapshot, *Stats, Caps, MetricID
 config           JSON settings via a thread-safe Store
 pkg/format       Vitals-style value formatting (Bytes, Speed, Temp, Hertz, Sparkline…)
@@ -56,8 +57,8 @@ pkg/format       Vitals-style value formatting (Bytes, Speed, Temp, Hertz, Spark
 `probe()` reads each optional sensor **once**. A source that responds is stored
 in `sensors.Sources`; the corresponding `entity.Caps` flag/list is set.
 `usecase.NewMonitor(&src, store)` gets those sources; `tray.New(store, hw,
-caps)` builds the UI. CPU and Mem are the only mandatory sources — everything
-else is optional.
+caps, updates)` builds the UI. CPU and Mem are the only mandatory sources —
+everything else is optional.
 
 **Capability gating is the core pattern.** A sensor missing on this hardware
 disables *its own group*, never the app (CLAUDE spec: *hide, don't crash*).

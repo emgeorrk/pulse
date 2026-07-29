@@ -6,12 +6,12 @@ require (
 	fyne.io/systray v1.12.2
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.6.0
+	golang.org/x/mod v0.27.0
 	golang.org/x/sys v0.47.0
 )
 
 require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
-	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
 )

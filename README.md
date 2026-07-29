@@ -53,13 +53,14 @@ it never gets in the way.
 
 ```sh
 brew install emgeorrk/tap/pulse
-ln -sfn "$(brew --prefix)/opt/pulse/Pulse.app" /Applications/Pulse.app
+ditto "$(brew --prefix)/opt/pulse/Pulse.app" /Applications/Pulse.app
 open /Applications/Pulse.app
 ```
 
 Homebrew builds Pulse on your own machine, so macOS opens it without any
-security warnings. The second line adds it to your Applications folder, and
-`brew upgrade pulse` keeps it up to date.
+security warnings. The second line copies it into your Applications folder so
+Spotlight and Launchpad can find it. After `brew upgrade pulse`, run the
+`ditto` line again to refresh the copy.
 
 ### Download the app (Apple Silicon Macs)
 
@@ -94,6 +95,8 @@ Everything is in the dropdown menu:
 - **Data units** — GB or GiB
 - **Menu bar graph** — show or hide the little CPU sparkline
 - **Launch at login**
+- **Update notification** — when a stable release is available, an
+  **Update available** link appears in the main menu
 
 ## Questions
 
