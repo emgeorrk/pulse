@@ -14,6 +14,7 @@ scratch for the Mac.
 <p align="left">
   <a href="https://github.com/emgeorrk/pulse/actions/workflows/ci.yml"><img src="https://github.com/emgeorrk/pulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/emgeorrk/pulse/releases/latest"><img src="https://img.shields.io/github/v/release/emgeorrk/pulse?sort=semver" alt="Latest release"></a>
+  <a href="https://github.com/emgeorrk/pulse/releases"><img src="https://img.shields.io/github/downloads/emgeorrk/pulse/total" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/emgeorrk/pulse" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey" alt="Platform: macOS 12+">
 </p>

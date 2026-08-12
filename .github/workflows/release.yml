@@ -45,6 +45,19 @@ jobs:
           ditto -c -k --keepParent bin/Pulse.app "$ZIP"
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
 
+      # A source tarball attached to the release, for the Homebrew formula.
+      # GitHub's on-demand /archive/ tarballs are not counted in release
+      # download stats; a release asset is, so every `brew install` shows up
+      # there. git archive packs the committed tree — the Info.plist stamp
+      # above stays out, the formula stamps the version itself.
+      - name: Package source tarball
+        id: srctar
+        run: |
+          V='${{ steps.version.outputs.version }}'
+          TAR="pulse-$V.tar.gz"
+          git archive --format=tar.gz --prefix="pulse-$V/" -o "$TAR" "$GITHUB_REF_NAME"
+          echo "tar=$TAR" >> "$GITHUB_OUTPUT"
+
       # Asks Claude (via OpenRouter) to write a short "What's changed" section
       # from the commit subjects since the previous tag. Falls back to the raw
       # commit list if the key is missing or the request fails — the release
@@ -138,25 +151,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" \
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.package.outputs.zip }}" \
+            "${{ steps.srctar.outputs.tar }}" \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
 
       # Bumps the source-tarball url + sha256 in the Homebrew formula so
       # `brew upgrade` sees the release. Needs a PAT (HOMEBREW_TAP_TOKEN) with
       # Contents:write on the tap; the built-in GITHUB_TOKEN cannot push to
-      # another repository. GitHub serves the tag tarball on demand, so its
-      # sha256 is computed here from the freshly pushed tag.
+      # another repository. The url points at the release asset uploaded
+      # above (not the on-demand /archive/ tarball) so brew installs are
+      # counted in the release download stats; its sha256 comes from the
+      # local file that was just uploaded.
       - name: Bump Homebrew formula
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           V='${{ steps.version.outputs.version }}'
-          TARBALL="https://github.com/emgeorrk/pulse/archive/refs/tags/v${V}.tar.gz"
-          SHA=$(curl -fsSL "$TARBALL" | shasum -a 256 | cut -d' ' -f1)
+          URL="https://github.com/emgeorrk/pulse/releases/download/v${V}/pulse-${V}.tar.gz"
+          SHA=$(shasum -a 256 "${{ steps.srctar.outputs.tar }}" | cut -d' ' -f1)
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/emgeorrk/homebrew-tap.git" tap
-          sed -i '' -E "s|/tags/v[0-9][0-9.]*\.tar\.gz|/tags/v${V}.tar.gz|" tap/Formula/pulse.rb
-          sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"$SHA\"/"             tap/Formula/pulse.rb
+          sed -i '' -E "s|^  url \".*\"|  url \"$URL\"|"       tap/Formula/pulse.rb
+          sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" tap/Formula/pulse.rb
           cd tap
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
