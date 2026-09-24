@@ -550,6 +550,14 @@ static NSImage *tintedTitleIcon(NSImage *icon, CGFloat side) {
                                action:@selector(menuHandler:)
                         keyEquivalent:@""];
     [menuItem setRepresentedObject:item->menuId];
+    // PATCH(pulse): apps linked against the macOS 27 SDK get menu item
+    // images hidden by AppKit unless the item opts in; the icons are the
+    // point of this menu. Older SDKs lack the property (and don't hide).
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+    if (@available(macOS 27.0, *)) {
+      menuItem.preferredImageVisibility = NSMenuItemImageVisibilityVisible;
+    }
+#endif
   }
   [menuItem setTitle:item->title];
   [menuItem setTag:[item->menuId integerValue]];

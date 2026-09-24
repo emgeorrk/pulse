@@ -9,12 +9,11 @@ permissions:
 
 jobs:
   release:
-    # Native arm64 build on Apple Silicon runners (macos-14+ are arm64).
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # full history + tags for the changelog
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -25,7 +24,6 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Stamp version into Info.plist
-        # Throwaway CI checkout — this edit is never committed.
         run: |
           V='${{ steps.version.outputs.version }}'
           /usr/libexec/PlistBuddy \
@@ -36,6 +34,9 @@ jobs:
       - name: Build, bundle, ad-hoc sign
         run: make sign
 
+      - name: Verify minimum macOS
+        run: make check-minos
+
       - name: Package .app
         id: package
         run: |
@@ -45,11 +46,6 @@ jobs:
           ditto -c -k --keepParent bin/Pulse.app "$ZIP"
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
 
-      # A source tarball attached to the release, for the Homebrew formula.
-      # GitHub's on-demand /archive/ tarballs are not counted in release
-      # download stats; a release asset is, so every `brew install` shows up
-      # there. git archive packs the committed tree — the Info.plist stamp
-      # above stays out, the formula stamps the version itself.
       - name: Package source tarball
         id: srctar
         run: |
@@ -58,10 +54,6 @@ jobs:
           git archive --format=tar.gz --prefix="pulse-$V/" -o "$TAR" "$GITHUB_REF_NAME"
           echo "tar=$TAR" >> "$GITHUB_OUTPUT"
 
-      # Asks Claude (via OpenRouter) to write a short "What's changed" section
-      # from the commit subjects since the previous tag. Falls back to the raw
-      # commit list if the key is missing or the request fails — the release
-      # must never break on this step.
       - name: Generate changelog
         id: changelog
         env:
@@ -144,7 +136,7 @@ jobs:
           - **Apple Silicon only.** Intel Macs are not supported by this binary;
             build from source instead. The Intel sensor paths were written from
             references and have **not been verified on real Intel hardware**.
-          - Requires macOS 12 (Monterey) or newer.
+          - Requires macOS 13 (Ventura) or newer.
           EOF
 
       - name: Create GitHub Release
@@ -157,13 +149,6 @@ jobs:
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
 
-      # Bumps the source-tarball url + sha256 in the Homebrew formula so
-      # `brew upgrade` sees the release. Needs a PAT (HOMEBREW_TAP_TOKEN) with
-      # Contents:write on the tap; the built-in GITHUB_TOKEN cannot push to
-      # another repository. The url points at the release asset uploaded
-      # above (not the on-demand /archive/ tarball) so brew installs are
-      # counted in the release download stats; its sha256 comes from the
-      # local file that was just uploaded.
       - name: Bump Homebrew formula
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
