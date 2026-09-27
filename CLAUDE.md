@@ -36,6 +36,11 @@ make generate # regenerate gomock mocks (go generate ./...)
   (`go test -short ./...`); they never assert exact sensor values.
 - `PULSE_DEBUG=1 ./bin/pulse -once` also dumps the IOReport channels — useful
   when porting to a new chip generation.
+- **Minimum macOS** lives only in `build/darwin/Info.plist`
+  (`LSMinimumSystemVersion`); the Makefile passes it to clang via
+  `CGO_CFLAGS`/`CGO_LDFLAGS` (`-mmacosx-version-min`). Without it the binary
+  requires the build host's macOS. Don't use `MACOSX_DEPLOYMENT_TARGET` — it's
+  not in Go's build cache key. `make check-minos` verifies the bundle.
 
 ## Architecture
 

@@ -16,7 +16,7 @@ scratch for the Mac.
   <a href="https://github.com/emgeorrk/pulse/releases/latest"><img src="https://img.shields.io/github/v/release/emgeorrk/pulse?sort=semver" alt="Latest release"></a>
   <a href="https://github.com/emgeorrk/pulse/releases"><img src="https://img.shields.io/github/downloads/emgeorrk/pulse/total" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/emgeorrk/pulse" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey" alt="Platform: macOS 12+">
+  <img src="https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey" alt="Platform: macOS 13+">
 </p>
 
 <p align="center">
@@ -116,7 +116,7 @@ missing or off. Apple Silicon is fully supported.
 Pulse is written in Go with CGO, reading Apple's IOKit, SMC, HID, and IOReport
 interfaces directly — no `sudo`, no `powermetrics`.
 
-Build from source (needs macOS 12+, Xcode command line tools, and Go 1.26):
+Build from source (needs macOS 13+, Xcode command line tools, and Go 1.26):
 
 ```sh
 make run    # build the app, sign it, and launch it

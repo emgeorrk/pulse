@@ -15,11 +15,48 @@ typedef struct {
 	int       isCharging, externalConnected;
 } pulse_batt;
 
-static long long pulse_dict_num(CFDictionaryRef d, CFStringRef key) {
-	CFNumberRef n = CFDictionaryGetValue(d, key);
+enum { PULSE_BATT_MAX_DICTS = 3 };
+
+typedef struct {
+	CFDictionaryRef d[PULSE_BATT_MAX_DICTS];
+	int             n;
+} pulse_batt_dicts;
+
+static void pulse_batt_dicts_add(pulse_batt_dicts *ds, CFTypeRef d) {
+	if (d && CFGetTypeID(d) == CFDictionaryGetTypeID() && ds->n < PULSE_BATT_MAX_DICTS)
+		ds->d[ds->n++] = (CFDictionaryRef)d;
+}
+
+// pulse_dict_num returns the key from the first dictionary that has it as a
+// number, so the earlier (older-layout) dictionary wins; 0 when none does.
+static long long pulse_dict_num(const pulse_batt_dicts *ds, CFStringRef key) {
 	long long v = 0;
-	if (n) CFNumberGetValue(n, kCFNumberSInt64Type, &v);
+	for (int i = 0; i < ds->n; i++) {
+		CFTypeRef n = CFDictionaryGetValue(ds->d[i], key);
+		if (n && CFGetTypeID(n) == CFNumberGetTypeID()) {
+			CFNumberGetValue((CFNumberRef)n, kCFNumberSInt64Type, &v);
+			break;
+		}
+	}
 	return v;
+}
+
+// pulse_pack_data copies the BatteryData dictionary of the battery's first
+// AppleSmartBatteryPack child, or returns NULL. The caller releases it.
+static CFTypeRef pulse_pack_data(io_service_t svc) {
+	io_iterator_t it;
+	if (IORegistryEntryGetChildIterator(svc, kIOServicePlane, &it) != KERN_SUCCESS)
+		return NULL;
+	CFTypeRef data = NULL;
+	io_object_t child;
+	while (!data && (child = IOIteratorNext(it))) {
+		if (IOObjectConformsTo(child, "AppleSmartBatteryPack"))
+			data = IORegistryEntryCreateCFProperty(child, CFSTR("BatteryData"),
+			                                       kCFAllocatorDefault, kNilOptions);
+		IOObjectRelease(child);
+	}
+	IOObjectRelease(it);
+	return data;
 }
 
 static int pulse_battery_read(pulse_batt *b) {
@@ -34,19 +71,31 @@ static int pulse_battery_read(pulse_batt *b) {
 		return -1;
 	}
 
-	b->rawCurrent      = pulse_dict_num(props, CFSTR("AppleRawCurrentCapacity"));
-	b->rawMax          = pulse_dict_num(props, CFSTR("AppleRawMaxCapacity"));
-	b->designCapacity  = pulse_dict_num(props, CFSTR("DesignCapacity"));
-	b->currentCapacity = pulse_dict_num(props, CFSTR("CurrentCapacity"));
-	b->maxCapacity     = pulse_dict_num(props, CFSTR("MaxCapacity"));
-	b->cycleCount      = pulse_dict_num(props, CFSTR("CycleCount"));
-	b->temperature     = pulse_dict_num(props, CFSTR("Temperature"));
-	b->voltage         = pulse_dict_num(props, CFSTR("Voltage"));
-	b->amperage        = pulse_dict_num(props, CFSTR("Amperage"));
-	b->timeRemaining   = pulse_dict_num(props, CFSTR("TimeRemaining"));
+	// macOS 27 dropped the raw capacities, DesignCapacity and Temperature from
+	// the top-level properties: DesignCapacity survives in the service's own
+	// BatteryData, the rest only in the AppleSmartBatteryPack child's
+	// BatteryData. Search the pre-27 layout first.
+	CFTypeRef pack = pulse_pack_data(svc);
+	pulse_batt_dicts ds = {0};
+	pulse_batt_dicts_add(&ds, props);
+	pulse_batt_dicts_add(&ds, CFDictionaryGetValue(props, CFSTR("BatteryData")));
+	pulse_batt_dicts_add(&ds, pack);
+
+	b->rawCurrent      = pulse_dict_num(&ds, CFSTR("AppleRawCurrentCapacity"));
+	b->rawMax          = pulse_dict_num(&ds, CFSTR("AppleRawMaxCapacity"));
+	b->designCapacity  = pulse_dict_num(&ds, CFSTR("DesignCapacity"));
+	b->currentCapacity = pulse_dict_num(&ds, CFSTR("CurrentCapacity"));
+	b->maxCapacity     = pulse_dict_num(&ds, CFSTR("MaxCapacity"));
+	b->cycleCount      = pulse_dict_num(&ds, CFSTR("CycleCount"));
+	b->temperature     = pulse_dict_num(&ds, CFSTR("Temperature"));
+	b->voltage         = pulse_dict_num(&ds, CFSTR("Voltage"));
+	b->amperage        = pulse_dict_num(&ds, CFSTR("Amperage"));
+	b->timeRemaining   = pulse_dict_num(&ds, CFSTR("TimeRemaining"));
 	b->isCharging        = CFDictionaryGetValue(props, CFSTR("IsCharging")) == kCFBooleanTrue;
 	b->externalConnected = CFDictionaryGetValue(props, CFSTR("ExternalConnected")) == kCFBooleanTrue;
 
+	if (pack)
+		CFRelease(pack);
 	CFRelease(props);
 	IOObjectRelease(svc);
 	return 0;
@@ -62,8 +111,9 @@ const (
 	unknownTimeMarker = 0xFFFF
 )
 
-// Batt reads AppleSmartBattery from IORegistry. Desktop Macs have no such
-// service — probe will disable the group.
+// Batt reads AppleSmartBattery from IORegistry (plus its AppleSmartBatteryPack
+// child, where macOS 27 moved the raw capacity and temperature keys). Desktop
+// Macs have no such service — probe will disable the group.
 type Batt struct{}
 
 func NewBattery() *Batt { return &Batt{} }

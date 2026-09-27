@@ -6,7 +6,17 @@ PLIST    := build/darwin/Info.plist
 ICON     := build/darwin/AppIcon.icns
 GOTAGS   ?=
 
-.PHONY: all build build-debug bundle sign run run-debug once appicon generate test vet lint lint-fix clean help
+# Oldest macOS Pulse runs on, read from LSMinimumSystemVersion so the plist
+# stays the single source (the Homebrew formula copies the same file). Without
+# an explicit flag clang stamps the build host's OS as the minimum; and
+# MACOSX_DEPLOYMENT_TARGET is not in Go's build cache key, so cached cgo
+# objects would silently ignore it — pass it via CGO_CFLAGS/CGO_LDFLAGS.
+MACOS_MIN := $(shell /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' $(PLIST))
+$(if $(MACOS_MIN),,$(error LSMinimumSystemVersion missing from $(PLIST)))
+export CGO_CFLAGS  := $(or $(CGO_CFLAGS),-O2 -g) -mmacosx-version-min=$(MACOS_MIN)
+export CGO_LDFLAGS := $(CGO_LDFLAGS) -mmacosx-version-min=$(MACOS_MIN)
+
+.PHONY: all build build-debug bundle sign run run-debug once check-minos appicon generate test vet lint lint-fix clean help
 
 all: sign ### build and sign the .app (default)
 
@@ -34,6 +44,10 @@ run: sign ### build, sign, and launch
 
 once: build ### print one metrics frame to stdout (sensor check without UI)
 	$(BINARY) -once
+
+check-minos: ### verify the bundled binary's minimum macOS matches Info.plist
+	@got=$$(vtool -show-build $(BUNDLE)/Contents/MacOS/pulse | awk '$$1 == "minos" {print $$2}'); \
+	[ "$$got" = "$(MACOS_MIN)" ] || { echo "minos is $$got, want $(MACOS_MIN)"; exit 1; }
 
 appicon: ### regenerate $(ICON) from build/darwin/AppIcon.svg
 	./scripts/gen-appicon.sh
